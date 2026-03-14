@@ -122,8 +122,6 @@ dist
 # TernJS port file
 .tern-port
 
-# Stores VSCode versions used for testing VSCode extensions
-.vscode-test
 
 # yarn v3
 .pnp.*
@@ -137,3 +135,72 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs and editors
+.idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.vscode-test
+
+# Next.js refined
+.swc/
+
+# Kotlin / Android / Gradle
+.gradle/
+build/
+*.iml
+.idea/
+local.properties
+.idea/caches
+.idea/libraries
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/shelf
+.idea/dictionaries
+.idea/vcs.xml
+.idea/jsLibraryMappings.xml
+.idea/deploymentTargetDropDown.xml
+*.apk
+*.aar
+*.ap_
+*.aab
+*.dex
+*.class
+gen/
+out/
+
+# C# / Visual Studio / .NET
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.csproj.user
+*.exe
+*.dll
+*.pdb
+.vs/
+TestResults/
+_ReSharper*/
+*.dotCover
+*.resharper
+*.opendb
+packages/
