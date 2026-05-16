@@ -1,0 +1,18 @@
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440001",
+    "user_id": "user1",
+    "device_id": "device1",
+    "activity_type": "browsing",
+    "activity_name": "Chrome",
+    "start_time": "2026-05-15T11:00:00Z"
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440002",
+    "user_id": "user1",
+    "device_id": "device1",
+    "activity_type": "gaming",
+    "activity_name": "Minecraft",
+    "start_time": "2026-05-15T12:00:00Z"
+  }
+]
