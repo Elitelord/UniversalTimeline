@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { CreateEventDto } from './event.dto';
-import { UpdateEventDto } from './dto/update-event.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Event } from './event.entity';
@@ -33,15 +32,21 @@ export class EventsService {
     return this.eventRepository.find();
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} event`;
-  }
+  getTimeline(user_id: string, start_date: string, end_date: string, page: number, limit: number, activity_type?: string) {
+    const query = this.eventRepository
+      .createQueryBuilder('event')
+      .where('event.user_id = :user_id', { user_id })
+      .andWhere('event.start_time >= :start_time', { start_time: start_date })
+      .andWhere('event.start_time <= :end_time', { end_time: end_date });
 
-  update(id: number, updateEventDto: UpdateEventDto) {
-    return `This action updates a #${id} event`;
-  }
+    if (activity_type) {
+      query.andWhere('event.activity_type = :activity_type', { activity_type });
+    }
 
-  remove(id: number) {
-    return `This action removes a #${id} event`;
+    return query
+      .orderBy('event.start_time', 'ASC')
+      .skip(page * limit)
+      .take(limit)
+      .getMany();
   }
 }
