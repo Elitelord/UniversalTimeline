@@ -1,0 +1,66 @@
+[
+  {
+    "id": "a1b2c3d4-e5f6-4a7b-8c9d-000000000001",
+    "user_id": "testuser",
+    "device_id": "laptop-01",
+    "activity_type": "coding",
+    "activity_name": "VSCode",
+    "start_time": "2026-06-01T20:00:00Z"
+  },
+  {
+    "id": "a1b2c3d4-e5f6-4a7b-8c9d-000000000002",
+    "user_id": "testuser",
+    "device_id": "laptop-01",
+    "activity_type": "browsing",
+    "activity_name": "Chrome",
+    "start_time": "2026-03-30T13:00:00Z"
+  },
+  {
+    "id": "a1b2c3d4-e5f6-4a7b-8c9d-000000000003",
+    "user_id": "testuser",
+    "device_id": "desktop-01",
+    "activity_type": "gaming",
+    "activity_name": "Minecraft",
+    "start_time": "2025-04-27T20:00:00Z"
+  },
+  {
+    "id": "a1b2c3d4-e5f6-4a7b-8c9d-000000000004",
+    "user_id": "testuser",
+    "device_id": "desktop-01",
+    "activity_type": "coding",
+    "activity_name": "IntelliJ",
+    "start_time": "2025-04-27T04:00:00Z"
+  },
+  {
+    "id": "a1b2c3d4-e5f6-4a7b-8c9d-000000000005",
+    "user_id": "testuser",
+    "device_id": "laptop-01",
+    "activity_type": "coding",
+    "activity_name": "VSCode",
+    "start_time": "2026-01-15T14:30:00Z"
+  },
+  {
+    "id": "a1b2c3d4-e5f6-4a7b-8c9d-000000000006",
+    "user_id": "testuser",
+    "device_id": "phone-01",
+    "activity_type": "browsing",
+    "activity_name": "Safari",
+    "start_time": "2025-08-12T09:15:00Z"
+  },
+  {
+    "id": "a1b2c3d4-e5f6-4a7b-8c9d-000000000007",
+    "user_id": "testuser",
+    "device_id": "laptop-01",
+    "activity_type": "gaming",
+    "activity_name": "Steam",
+    "start_time": "2025-12-25T22:00:00Z"
+  },
+  {
+    "id": "a1b2c3d4-e5f6-4a7b-8c9d-000000000008",
+    "user_id": "otheruser",
+    "device_id": "laptop-02",
+    "activity_type": "coding",
+    "activity_name": "Vim",
+    "start_time": "2026-03-30T13:00:00Z"
+  }
+]

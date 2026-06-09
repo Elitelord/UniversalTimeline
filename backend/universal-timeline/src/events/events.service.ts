@@ -49,4 +49,51 @@ export class EventsService {
       .take(limit)
       .getMany();
   }
+  async getSummary(user_id: string, date:string ) {
+    const query = await this.eventRepository
+      .createQueryBuilder('event')
+      .where('event.user_id = :user_id', { user_id })
+      .andWhere('event.start_time >= :date', { date })
+      .andWhere("event.start_time < CAST(:date AS date) + INTERVAL '1 day'", { date })
+      .andWhere('event.end_time IS NOT NULL')
+      .select('event.activity_type')
+      .addSelect('SUM(EXTRACT(EPOCH FROM (event.end_time - event.start_time)) / 60)', 'duration')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('event.activity_type')
+      .orderBy('duration', 'DESC')
+      .getRawMany();
+    const queryTwo = await this.eventRepository
+      .createQueryBuilder('event')
+      .where('event.user_id = :user_id', { user_id })
+      .andWhere('event.start_time >= :date', { date })
+      .andWhere("event.start_time < CAST(:date AS date) + INTERVAL '1 day'", { date })
+      .andWhere('event.end_time IS NOT NULL')
+      .select('event.activity_name')
+      .addSelect('SUM(EXTRACT(EPOCH FROM (event.end_time - event.start_time)) / 60)', 'total_minutes')
+      .groupBy('event.activity_name')
+      .orderBy('total_minutes', 'DESC')
+      .limit(5)
+      .getRawMany();
+    let totalMinutes = 0;
+    for (const act of query) {
+      totalMinutes += parseFloat(act.duration);
+    }
+
+    const summary = {
+      user_id: user_id,
+      date: date,
+      total_active_time_minutes: totalMinutes,
+      activity_breakdown: query.map(act => ({
+        activity_type: act.event_activity_type,
+        total_minutes: parseFloat(act.duration),
+        event_count: parseInt(act.count),
+      })),
+      top_applications: queryTwo.map(app => ({
+        activity_name: app.event_activity_name,
+        total_minutes: parseFloat(app.total_minutes),
+      })),
+    }
+
+    return summary;
+  }
 }

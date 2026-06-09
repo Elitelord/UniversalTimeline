@@ -1,0 +1,73 @@
+[
+  {
+    "id": "b1b2c3d4-e5f6-4a7b-8c9d-100000000001",
+    "user_id": "summaryuser",
+    "device_id": "laptop-01",
+    "activity_type": "coding",
+    "activity_name": "VSCode",
+    "start_time": "2026-06-08T08:00:00Z",
+    "end_time": "2026-06-08T10:30:00Z"
+  },
+  {
+    "id": "b1b2c3d4-e5f6-4a7b-8c9d-100000000002",
+    "user_id": "summaryuser",
+    "device_id": "laptop-01",
+    "activity_type": "browsing",
+    "activity_name": "Chrome",
+    "start_time": "2026-06-08T10:30:00Z",
+    "end_time": "2026-06-08T11:45:00Z"
+  },
+  {
+    "id": "b1b2c3d4-e5f6-4a7b-8c9d-100000000003",
+    "user_id": "summaryuser",
+    "device_id": "laptop-01",
+    "activity_type": "coding",
+    "activity_name": "IntelliJ",
+    "start_time": "2026-06-08T12:00:00Z",
+    "end_time": "2026-06-08T13:00:00Z"
+  },
+  {
+    "id": "b1b2c3d4-e5f6-4a7b-8c9d-100000000004",
+    "user_id": "summaryuser",
+    "device_id": "desktop-01",
+    "activity_type": "gaming",
+    "activity_name": "Minecraft",
+    "start_time": "2026-06-08T18:00:00Z",
+    "end_time": "2026-06-08T19:15:00Z"
+  },
+  {
+    "id": "b1b2c3d4-e5f6-4a7b-8c9d-100000000005",
+    "user_id": "summaryuser",
+    "device_id": "laptop-01",
+    "activity_type": "coding",
+    "activity_name": "VSCode",
+    "start_time": "2026-06-08T14:00:00Z",
+    "end_time": "2026-06-08T15:30:00Z"
+  },
+  {
+    "id": "b1b2c3d4-e5f6-4a7b-8c9d-100000000006",
+    "user_id": "summaryuser",
+    "device_id": "phone-01",
+    "activity_type": "browsing",
+    "activity_name": "Safari",
+    "start_time": "2026-06-08T20:00:00Z",
+    "end_time": "2026-06-08T20:30:00Z"
+  },
+  {
+    "id": "b1b2c3d4-e5f6-4a7b-8c9d-100000000007",
+    "user_id": "summaryuser",
+    "device_id": "laptop-01",
+    "activity_type": "coding",
+    "activity_name": "VSCode",
+    "start_time": "2026-06-08T21:00:00Z"
+  },
+  {
+    "id": "b1b2c3d4-e5f6-4a7b-8c9d-100000000008",
+    "user_id": "otheruser",
+    "device_id": "laptop-02",
+    "activity_type": "coding",
+    "activity_name": "Vim",
+    "start_time": "2026-06-08T09:00:00Z",
+    "end_time": "2026-06-08T11:00:00Z"
+  }
+]
