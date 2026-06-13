@@ -3,6 +3,7 @@ import { CreateEventDto } from './event.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Event } from './event.entity';
+import { MergeService } from '../processing/merge.service';
 
 
 @Injectable()
@@ -10,6 +11,7 @@ export class EventsService {
   constructor(    
     @InjectRepository(Event)
     private readonly eventRepository: Repository<Event>,
+    private readonly mergeService: MergeService,
   ) {}
   
   create(createEventDto: CreateEventDto | CreateEventDto[]) {
@@ -18,12 +20,15 @@ export class EventsService {
       for (const event of createEventDto) {
         const { metadata, ...rest } = event;
         const newEvent = this.eventRepository.create(rest);
+        newEvent.start_time = new Date(event.start_time);
+        newEvent.end_time = event.end_time ? new Date(event.end_time) : null;
         if (metadata) {
           newEvent.metadata = metadata;
         }
         newEventList.push(newEvent);
       }
-      return this.eventRepository.save(newEventList);
+      const mergedEvents = this.mergeService.mergeEvents(newEventList);
+      return this.eventRepository.save(mergedEvents);
     }
     return this.eventRepository.save(createEventDto);
   }

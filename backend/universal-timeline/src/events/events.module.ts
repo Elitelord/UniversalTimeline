@@ -1,14 +1,15 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventsService } from './events.service';
+import { MergeService } from '../processing/merge.service';
 import { EventsController } from './events.controller';
 import { Event } from './event.entity'; // Import your entity
 
 @Module({
   // This line registers the Event entity with this specific module
-  imports: [TypeOrmModule.forFeature([Event])], 
+  imports: [TypeOrmModule.forFeature([Event])],
   controllers: [EventsController],
-  providers: [EventsService],
-  exports: [EventsService],
+  providers: [EventsService, MergeService],
+  exports: [EventsService, MergeService],
 })
-export class EventsModule {}
+export class EventsModule { }

@@ -1,0 +1,29 @@
+[
+  {
+    "id": "c1c2c3d4-e5f6-4a7b-8c9d-200000000001",
+    "user_id": "mergeuser",
+    "device_id": "laptop-01",
+    "activity_type": "coding",
+    "activity_name": "VSCode",
+    "start_time": "2026-06-12T13:00:00Z",
+    "end_time": "2026-06-12T13:01:00Z"
+  },
+  {
+    "id": "c1c2c3d4-e5f6-4a7b-8c9d-200000000002",
+    "user_id": "mergeuser",
+    "device_id": "laptop-01",
+    "activity_type": "coding",
+    "activity_name": "VSCode",
+    "start_time": "2026-06-12T13:01:00Z",
+    "end_time": "2026-06-12T13:02:00Z"
+  },
+  {
+    "id": "c1c2c3d4-e5f6-4a7b-8c9d-200000000003",
+    "user_id": "mergeuser",
+    "device_id": "laptop-01",
+    "activity_type": "coding",
+    "activity_name": "VSCode",
+    "start_time": "2026-06-12T13:02:00Z",
+    "end_time": "2026-06-12T13:03:00Z"
+  }
+]

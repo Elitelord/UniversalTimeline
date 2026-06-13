@@ -5,7 +5,7 @@ import { Event } from '../events/event.entity';
 export class MergeService {
     mergeEvents(events:Event[]): Event[] {  
         const mergedEvents: Event[] = [];
-        let eventsCopy = events.filter((event) => event.start_time !== null && event.end_time !== null);
+        let eventsCopy = events.filter((event): event is Event & { end_time: Date } => event.start_time !== null && event.end_time !== null);
         if (eventsCopy.length <= 1) {
             return eventsCopy;
         }

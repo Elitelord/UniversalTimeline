@@ -24,7 +24,7 @@ export class Event {
   start_time: Date;
 
   @Column({ type: 'timestamptz', nullable: true })
-  end_time: Date;
+  end_time: Date | null;
 
   @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, any>;
