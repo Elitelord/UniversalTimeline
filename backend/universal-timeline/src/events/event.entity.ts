@@ -31,4 +31,7 @@ export class Event {
 
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
+
+  @Column({type: 'varchar', nullable: true, unique: true })
+  idempotency_hash: string;
 }

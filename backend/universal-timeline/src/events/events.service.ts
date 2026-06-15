@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { CreateEventDto } from './event.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Event } from './event.entity';
 import { MergeService } from '../processing/merge.service';
-
+import { createHash } from 'crypto';
 
 @Injectable()
 export class EventsService {
@@ -14,7 +14,7 @@ export class EventsService {
     private readonly mergeService: MergeService,
   ) {}
   
-  create(createEventDto: CreateEventDto | CreateEventDto[]) {
+  async create(createEventDto: CreateEventDto | CreateEventDto[]) {
     if (Array.isArray(createEventDto)) {
       const newEventList: Event[] = [];
       for (const event of createEventDto) {
@@ -27,10 +27,41 @@ export class EventsService {
         }
         newEventList.push(newEvent);
       }
-      const mergedEvents = this.mergeService.mergeEvents(newEventList);
+      for(const event of newEventList) {
+        event.idempotency_hash = createHash('sha256').update(event.device_id + event.activity_name + event.start_time.toISOString()).digest('hex');
+      }
+      const existingEvents = await this.eventRepository.find({
+        where: {
+          idempotency_hash: In(newEventList.map(event => event.idempotency_hash)),
+        },
+      });
+      
+      const nonExistingEvents = newEventList.filter(event => !existingEvents.some(existingEvent => existingEvent.idempotency_hash === event.idempotency_hash));
+      
+      
+      const mergedEvents = this.mergeService.mergeEvents(nonExistingEvents);
       return this.eventRepository.save(mergedEvents);
     }
-    return this.eventRepository.save(createEventDto);
+    const { metadata, ...rest } = createEventDto;
+    const newEvent = this.eventRepository.create(rest);
+    newEvent.start_time = new Date(createEventDto.start_time);
+    newEvent.end_time = createEventDto.end_time ? new Date(createEventDto.end_time) : null;
+    if (metadata) {
+      newEvent.metadata = metadata;
+    }
+    const newEventList = [newEvent];
+    
+    newEvent.idempotency_hash = createHash('sha256').update(newEvent.device_id + newEvent.activity_name + newEvent.start_time.toISOString()).digest('hex');
+    
+    const existingEvents = await this.eventRepository.find({
+        where: {
+          idempotency_hash: In(newEventList.map(event => event.idempotency_hash)),
+        },
+    });
+      
+    const nonExistingEvents = newEventList.filter(event => !existingEvents.some(existingEvent => existingEvent.idempotency_hash === event.idempotency_hash));
+    const mergedEvents = this.mergeService.mergeEvents(nonExistingEvents);
+    return this.eventRepository.save(mergedEvents);
   }
 
   findAll() {

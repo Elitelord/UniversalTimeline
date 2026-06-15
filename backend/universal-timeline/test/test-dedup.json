@@ -1,0 +1,20 @@
+[
+  {
+    "id": "d1d2d3d4-e5f6-4a7b-8c9d-300000000001",
+    "user_id": "dedupuser",
+    "device_id": "laptop-01",
+    "activity_type": "coding",
+    "activity_name": "VSCode",
+    "start_time": "2026-06-14T10:00:00Z",
+    "end_time": "2026-06-14T11:00:00Z"
+  },
+  {
+    "id": "d1d2d3d4-e5f6-4a7b-8c9d-300000000002",
+    "user_id": "dedupuser",
+    "device_id": "laptop-01",
+    "activity_type": "browsing",
+    "activity_name": "Chrome",
+    "start_time": "2026-06-14T12:00:00Z",
+    "end_time": "2026-06-14T13:00:00Z"
+  }
+]
