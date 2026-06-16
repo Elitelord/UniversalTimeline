@@ -10,7 +10,7 @@ import { RequestLoggerMiddleware } from './common/middleware/request-logger.midd
 
 @Module({
   imports: [
-    ConfigModule.forRoot(),
+    ConfigModule.forRoot({ isGlobal: true }),
     EventsModule,
     TimelineModule,
     SummaryModule,
