@@ -158,6 +158,7 @@ Thumbs.db
 *.sublime-workspace 
 CLAUDE.md
 AGENTS.md
+/plan
 
 # IDE - VSCode
 .vscode/*
