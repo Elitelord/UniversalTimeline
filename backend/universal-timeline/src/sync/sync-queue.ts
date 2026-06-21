@@ -50,7 +50,7 @@ export class SyncQueue {
     if (this.retryTimer) return;
 
     const delay = Math.min(this.baseDelay * Math.pow(2, this.retryAttempt), this.maxDelay) + Math.random() * this.baseDelay;
-    this.retryTimer = setTimeout(() => this.flush(), delay);
+    this.retryTimer = setTimeout(() => { this.retryTimer = null; this.flush(); }, delay);
 
     this.retryAttempt++;
     

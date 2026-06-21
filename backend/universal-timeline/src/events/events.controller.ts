@@ -10,14 +10,14 @@ export class EventsController {
 
   @Post('list')
   create(@Body(new ParseArrayPipe({ items: CreateEventDto})) createEventDto: CreateEventDto[], @Req() req) {
-    // Override user_id from JWT — don't trust client-provided user_id
-    createEventDto.forEach(e => e.user_id = req.user_id);
+    // Override user_id from JWT when auth is active
+    if (req.user_id) createEventDto.forEach(e => e.user_id = req.user_id);
     return this.eventsService.create(createEventDto);
   }
 
   @Post()
   createOne(@Body() createEventDto: CreateEventDto, @Req() req) {
-    createEventDto.user_id = req.user_id;
+    if (req.user_id) createEventDto.user_id = req.user_id;
     return this.eventsService.create(createEventDto);
   }
 
