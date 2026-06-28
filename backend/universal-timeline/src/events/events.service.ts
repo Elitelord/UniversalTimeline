@@ -105,6 +105,7 @@ export class EventsService {
       .andWhere("event.start_time < CAST(:date AS date) + INTERVAL '1 day'", { date })
       .andWhere('event.end_time IS NOT NULL')
       .select('event.activity_name')
+      .addSelect('MAX(event.activity_type)', 'activity_type')
       .addSelect('SUM(EXTRACT(EPOCH FROM (event.end_time - event.start_time)) / 60)', 'total_minutes')
       .groupBy('event.activity_name')
       .orderBy('total_minutes', 'DESC')
@@ -126,6 +127,7 @@ export class EventsService {
       })),
       top_applications: queryTwo.map(app => ({
         activity_name: app.event_activity_name,
+        activity_type: app.activity_type,
         total_minutes: parseFloat(app.total_minutes),
       })),
     }

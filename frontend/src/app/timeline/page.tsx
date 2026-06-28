@@ -5,12 +5,15 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { fetchTimeline } from '@/lib/api';
 import TimelineView from '@/components/TimelineView';
+import SummaryView from '@/components/SummaryView';
+import { Activity, LayoutDashboard, LogOut } from 'lucide-react';
 
 export default function TimelinePage() {
   const { user, session, loading: authLoading, signOut } = useAuth();
   const router = useRouter();
 
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [activeTab, setActiveTab] = useState<'timeline' | 'summary'>('timeline');
   const [events, setEvents] = useState<any[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +25,7 @@ export default function TimelinePage() {
     }
   }, [user, authLoading, router]);
 
-  // Fetch events when date changes
+  // Fetch events when date changes (only if timeline tab is active, but we fetch it regardless to cache)
   const loadEvents = useCallback(async () => {
     if (!session) return;
 
@@ -75,7 +78,7 @@ export default function TimelinePage() {
   if (authLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-6 h-6 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -83,105 +86,127 @@ export default function TimelinePage() {
   if (!user) return null;
 
   return (
-    <div className="flex-1 flex flex-col max-w-5xl mx-auto w-full">
+    <div className="flex-1 flex flex-col max-w-5xl mx-auto w-full h-full bg-zinc-950">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+      <header className="flex items-center justify-between px-6 py-4 border-b border-zinc-800/80">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-sm">
+            <svg className="w-4 h-4 text-zinc-100" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h1 className="text-xl font-bold text-gray-100">Timeline</h1>
+          <h1 className="text-lg font-semibold text-zinc-100 tracking-tight">Timeline</h1>
         </div>
 
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-400">{user.email}</span>
+          <span className="text-sm text-zinc-400 font-medium hidden sm:inline-block">{user.email}</span>
           <button
             onClick={signOut}
-            className="text-sm text-gray-400 hover:text-red-400 transition-colors cursor-pointer"
+            className="p-2 text-zinc-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors cursor-pointer"
+            title="Sign Out"
           >
-            Sign Out
+            <LogOut className="w-4 h-4" />
           </button>
         </div>
       </header>
 
-      {/* Date Navigation */}
-      <div className="flex items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={goToPreviousDay}
-            className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors cursor-pointer"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 text-sm
-                       focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer
-                       [color-scheme:dark]"
-          />
-
-          <button
-            onClick={goToNextDay}
-            className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors cursor-pointer"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-
-          {!isToday && (
+      {/* Date Navigation & Tabs */}
+      <div className="px-6 py-4 border-b border-zinc-800/80 bg-zinc-950/50 sticky top-0 z-40 backdrop-blur-md">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          
+          <div className="flex items-center gap-2">
             <button
-              onClick={goToToday}
-              className="px-3 py-2 text-xs font-medium bg-blue-600/20 text-blue-400 border border-blue-500/30 
-                         rounded-lg hover:bg-blue-600/30 transition-colors cursor-pointer"
+              onClick={goToPreviousDay}
+              className="p-2 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 transition-colors cursor-pointer shadow-sm"
             >
-              Today
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
             </button>
-          )}
-        </div>
 
-        <div className="text-sm text-gray-400">
-          {formatDisplayDate(date)} · {events.length} event{events.length !== 1 ? 's' : ''}
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-200 text-sm font-medium
+                         focus:outline-none focus:ring-1 focus:ring-zinc-400 focus:border-zinc-500 cursor-pointer shadow-sm
+                         [color-scheme:dark]"
+            />
+
+            <button
+              onClick={goToNextDay}
+              className="p-2 rounded-lg border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 transition-colors cursor-pointer shadow-sm"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+
+            {!isToday && (
+              <button
+                onClick={goToToday}
+                className="px-3 py-2 ml-1 text-xs font-semibold bg-zinc-100 text-zinc-900 rounded-lg hover:bg-white transition-colors cursor-pointer shadow-sm"
+              >
+                Today
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1 bg-zinc-900/50 p-1 rounded-xl border border-zinc-800">
+            <button
+              onClick={() => setActiveTab('timeline')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                activeTab === 'timeline'
+                  ? 'bg-zinc-800 text-zinc-100 shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+              }`}
+            >
+              <Activity className="w-4 h-4" />
+              Timeline
+            </button>
+            <button
+              onClick={() => setActiveTab('summary')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                activeTab === 'summary'
+                  ? 'bg-zinc-800 text-zinc-100 shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+              }`}
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              Summary
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Activity type legend */}
-      <div className="flex items-center gap-4 px-6 pb-3 flex-wrap">
-        {[
-          { type: 'coding', color: 'bg-blue-500' },
-          { type: 'browsing', color: 'bg-green-500' },
-          { type: 'communication', color: 'bg-purple-500' },
-          { type: 'design', color: 'bg-orange-500' },
-          { type: 'productivity', color: 'bg-teal-500' },
-        ].map(({ type, color }) => (
-          <div key={type} className="flex items-center gap-1.5">
-            <div className={`w-2.5 h-2.5 rounded-sm ${color}`} />
-            <span className="text-xs text-gray-400 capitalize">{type}</span>
-          </div>
-        ))}
-      </div>
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-y-auto">
+        {activeTab === 'timeline' ? (
+          <div className="px-6 py-6 h-full flex flex-col">
+            {error && (
+              <div className="mb-4 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3">
+                <div className="p-2 bg-red-500/10 rounded-lg text-red-400 shrink-0">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-red-400">Connection Error</h3>
+                  <p className="text-xs text-red-400/80 mt-1">{error}</p>
+                </div>
+              </div>
+            )}
 
-      {/* Timeline */}
-      <div className="flex-1 overflow-y-auto px-6 pb-8">
-        {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
-            Failed to load events: {error}
-          </div>
-        )}
-
-        {loadingEvents ? (
-          <div className="flex items-center justify-center py-24">
-            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            {loadingEvents ? (
+              <div className="flex items-center justify-center py-24">
+                <div className="w-6 h-6 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (
+              <TimelineView events={events} date={date} />
+            )}
           </div>
         ) : (
-          <TimelineView events={events} date={date} />
+          <div className="px-6 py-6 h-full">
+            <SummaryView date={date} />
+          </div>
         )}
       </div>
     </div>

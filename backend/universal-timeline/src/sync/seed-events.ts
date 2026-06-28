@@ -13,7 +13,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-const API_URL = 'http://localhost:3000/events/list';
+const API_URL = 'http://localhost:3001/events/list';
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.error('❌ Error: SUPABASE_URL or SUPABASE_ANON_KEY is not defined in backend .env');
@@ -30,7 +30,7 @@ if (!email || !password) {
 
 async function seed() {
   // Authenticate with Supabase
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const supabase = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!);
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {

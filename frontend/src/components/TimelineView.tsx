@@ -16,14 +16,14 @@ interface TimelineViewProps {
 }
 
 const ACTIVITY_COLORS: Record<string, { bg: string; border: string; text: string }> = {
-  coding:        { bg: 'bg-blue-500/20',   border: 'border-blue-500/50',   text: 'text-blue-300' },
-  browsing:      { bg: 'bg-green-500/20',  border: 'border-green-500/50',  text: 'text-green-300' },
-  communication: { bg: 'bg-purple-500/20', border: 'border-purple-500/50', text: 'text-purple-300' },
-  design:        { bg: 'bg-orange-500/20', border: 'border-orange-500/50', text: 'text-orange-300' },
-  productivity:  { bg: 'bg-teal-500/20',   border: 'border-teal-500/50',   text: 'text-teal-300' },
+  coding:        { bg: 'bg-blue-500/10',   border: 'border-blue-500/20',   text: 'text-blue-400' },
+  browsing:      { bg: 'bg-emerald-500/10',  border: 'border-emerald-500/20',  text: 'text-emerald-400' },
+  communication: { bg: 'bg-purple-500/10', border: 'border-purple-500/20', text: 'text-purple-400' },
+  design:        { bg: 'bg-amber-500/10', border: 'border-amber-500/20', text: 'text-amber-400' },
+  productivity:  { bg: 'bg-teal-500/10',   border: 'border-teal-500/20',   text: 'text-teal-400' },
 };
 
-const DEFAULT_COLOR = { bg: 'bg-gray-500/20', border: 'border-gray-500/50', text: 'text-gray-300' };
+const DEFAULT_COLOR = { bg: 'bg-zinc-500/10', border: 'border-zinc-500/20', text: 'text-zinc-400' };
 
 const HOUR_HEIGHT = 80; // px per hour
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -63,12 +63,12 @@ export default function TimelineView({ events, date }: TimelineViewProps) {
 
   if (events.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-gray-500">
-        <svg className="w-16 h-16 mb-4 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+      <div className="flex flex-col items-center justify-center py-24 text-zinc-500">
+        <svg className="w-12 h-12 mb-4 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
-        <p className="text-lg font-medium">No events for this day</p>
-        <p className="text-sm mt-1">Activity will appear here once tracked</p>
+        <p className="text-sm font-medium text-zinc-400">No events for this day</p>
+        <p className="text-xs mt-1 text-zinc-600">Activity will appear here once tracked</p>
       </div>
     );
   }
@@ -80,7 +80,7 @@ export default function TimelineView({ events, date }: TimelineViewProps) {
         {HOURS.map((hour) => (
           <div
             key={hour}
-            className="text-right text-xs text-gray-500 font-mono"
+            className="text-right text-xs text-zinc-500 font-mono"
             style={{ height: HOUR_HEIGHT }}
           >
             {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
@@ -94,7 +94,7 @@ export default function TimelineView({ events, date }: TimelineViewProps) {
         {HOURS.map((hour) => (
           <div
             key={hour}
-            className="absolute left-0 right-0 border-t border-gray-800/60"
+            className="absolute left-0 right-0 border-t border-dashed border-zinc-800/60"
             style={{ top: hour * HOUR_HEIGHT }}
           />
         ))}
@@ -112,11 +112,11 @@ export default function TimelineView({ events, date }: TimelineViewProps) {
             style={{ top: event.top, height: event.height }}
           >
             <div className="px-3 py-1.5 h-full flex flex-col justify-center">
-              <div className={`text-sm font-semibold truncate ${event.colors.text}`}>
+              <div className={`text-xs font-medium truncate ${event.colors.text}`}>
                 {event.activity_name}
               </div>
               {event.height > 40 && (
-                <div className="text-xs text-gray-400 mt-0.5 truncate">
+                <div className="text-[10px] text-zinc-500 mt-0.5 truncate">
                   {formatTime(event.startDate)} – {formatTime(event.endDate)} · {formatDuration(event.startDate, event.endDate)}
                 </div>
               )}
@@ -125,13 +125,13 @@ export default function TimelineView({ events, date }: TimelineViewProps) {
             {/* Tooltip on hover */}
             <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 
                             hidden group-hover:block pointer-events-none">
-              <div className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap">
-                <p className={`font-semibold text-sm ${event.colors.text}`}>{event.activity_name}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{event.activity_type}</p>
-                <p className="text-xs text-gray-300 mt-1">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 shadow-sm whitespace-nowrap">
+                <p className={`font-medium text-sm ${event.colors.text}`}>{event.activity_name}</p>
+                <p className="text-xs text-zinc-400 mt-0.5 capitalize">{event.activity_type}</p>
+                <p className="text-xs text-zinc-500 mt-1">
                   {formatTime(event.startDate)} – {formatTime(event.endDate)}
                 </p>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-zinc-400 font-medium">
                   Duration: {formatDuration(event.startDate, event.endDate)}
                 </p>
               </div>
