@@ -15,9 +15,10 @@ export class TimelineController {
     @Query('page', new DefaultValuePipe(0), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(100), ParseIntPipe) limit: number,
     @Query('activity_type') activity_type?: string,
+    @Query('search') search?: string,
   ) {
     // user_id comes from the verified JWT, not from query params
-    return this.eventsService.getTimeline(req.user_id, start_date, end_date, page, limit, activity_type);
+    return this.eventsService.getTimeline(req.user_id, start_date, end_date, page, limit, activity_type, search);
   }
 }
 

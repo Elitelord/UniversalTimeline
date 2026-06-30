@@ -26,3 +26,12 @@ html {
 ::-webkit-scrollbar-thumb:hover {
   background: #3f3f46; /* zinc-700 */
 }
+
+/* Hide scrollbar but keep scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

@@ -68,7 +68,7 @@ export class EventsService {
     return this.eventRepository.find();
   }
 
-  getTimeline(user_id: string, start_date: string, end_date: string, page: number, limit: number, activity_type?: string) {
+  getTimeline(user_id: string, start_date: string, end_date: string, page: number, limit: number, activity_type?: string, search?: string) {
     const query = this.eventRepository
       .createQueryBuilder('event')
       .where('event.user_id = :user_id', { user_id })
@@ -76,7 +76,16 @@ export class EventsService {
       .andWhere('event.start_time <= :end_time', { end_time: end_date });
 
     if (activity_type) {
-      query.andWhere('event.activity_type = :activity_type', { activity_type });
+      const types = activity_type.split(',').map(t => t.trim()).filter(Boolean);
+      if (types.length === 1) {
+        query.andWhere('event.activity_type = :activity_type', { activity_type: types[0] });
+      } else if (types.length > 1) {
+        query.andWhere('event.activity_type IN (:...activity_types)', { activity_types: types });
+      }
+    }
+
+    if (search) {
+      query.andWhere('event.activity_name ILIKE :search', { search: `%${search}%` });
     }
 
     return query

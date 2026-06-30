@@ -1,12 +1,20 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { fetchTimeline } from '@/lib/api';
 import TimelineView from '@/components/TimelineView';
 import SummaryView from '@/components/SummaryView';
-import { Activity, LayoutDashboard, LogOut } from 'lucide-react';
+import { Activity, LayoutDashboard, LogOut, Search, X } from 'lucide-react';
+
+const ACTIVITY_TYPES = [
+  { value: 'coding', label: 'Coding', color: 'bg-blue-500' },
+  { value: 'browsing', label: 'Browsing', color: 'bg-emerald-500' },
+  { value: 'communication', label: 'Communication', color: 'bg-purple-500' },
+  { value: 'design', label: 'Design', color: 'bg-amber-500' },
+  { value: 'productivity', label: 'Productivity', color: 'bg-teal-500' },
+];
 
 export default function TimelinePage() {
   const { user, session, loading: authLoading, signOut } = useAuth();
@@ -18,6 +26,12 @@ export default function TimelinePage() {
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Filter state
+  const [activeTypes, setActiveTypes] = useState<string[]>([]);
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Redirect if not authenticated
   useEffect(() => {
     if (!authLoading && !user) {
@@ -25,7 +39,18 @@ export default function TimelinePage() {
     }
   }, [user, authLoading, router]);
 
-  // Fetch events when date changes (only if timeline tab is active, but we fetch it regardless to cache)
+  // Debounce search input
+  useEffect(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      setDebouncedSearch(searchInput);
+    }, 400);
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, [searchInput]);
+
+  // Fetch events when date, filters, or debounced search changes
   const loadEvents = useCallback(async () => {
     if (!session) return;
 
@@ -33,7 +58,11 @@ export default function TimelinePage() {
     setError(null);
 
     try {
-      const data = await fetchTimeline(session, date, date);
+      const filters: { activityTypes?: string[]; search?: string } = {};
+      if (activeTypes.length > 0) filters.activityTypes = activeTypes;
+      if (debouncedSearch) filters.search = debouncedSearch;
+
+      const data = await fetchTimeline(session, date, date, filters);
       setEvents(data);
     } catch (err: any) {
       setError(err.message);
@@ -41,7 +70,7 @@ export default function TimelinePage() {
     } finally {
       setLoadingEvents(false);
     }
-  }, [session, date]);
+  }, [session, date, activeTypes, debouncedSearch]);
 
   useEffect(() => {
     loadEvents();
@@ -74,6 +103,19 @@ export default function TimelinePage() {
   };
 
   const isToday = date === new Date().toISOString().split('T')[0];
+  const hasActiveFilters = activeTypes.length > 0 || searchInput;
+
+  const toggleType = (type: string) => {
+    setActiveTypes(prev =>
+      prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+    );
+  };
+
+  const clearFilters = () => {
+    setActiveTypes([]);
+    setSearchInput('');
+    setDebouncedSearch('');
+  };
 
   if (authLoading) {
     return (
@@ -179,6 +221,66 @@ export default function TimelinePage() {
         </div>
       </div>
 
+      {/* Filter Bar (Timeline tab only) */}
+      {activeTab === 'timeline' && (
+        <div className="px-6 py-3 border-b border-zinc-800/80 bg-zinc-950/30">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            {/* Search Input */}
+            <div className="relative flex-1 w-full sm:max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search activities..."
+                className="w-full pl-9 pr-8 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-200 placeholder-zinc-500
+                           focus:outline-none focus:ring-1 focus:ring-zinc-400 focus:border-zinc-500 transition-all"
+              />
+              {searchInput && (
+                <button
+                  onClick={() => { setSearchInput(''); setDebouncedSearch(''); }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Activity Type Toggle Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              {ACTIVITY_TYPES.map((t) => {
+                const isActive = activeTypes.includes(t.value);
+                return (
+                  <button
+                    key={t.value}
+                    onClick={() => toggleType(t.value)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer border ${
+                      isActive
+                        ? 'bg-zinc-800 text-zinc-100 border-zinc-700'
+                        : 'bg-zinc-900/50 text-zinc-500 border-zinc-800/80 hover:text-zinc-300 hover:border-zinc-700'
+                    }`}
+                  >
+                    <div className={`w-2 h-2 rounded-full ${t.color} ${isActive ? 'opacity-100' : 'opacity-40'}`} />
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Clear Filters */}
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-zinc-400 hover:text-zinc-100 border border-zinc-800 rounded-lg hover:bg-zinc-800/50 transition-colors cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'timeline' ? (
@@ -212,3 +314,4 @@ export default function TimelinePage() {
     </div>
   );
 }
+

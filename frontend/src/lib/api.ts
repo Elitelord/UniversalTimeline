@@ -36,13 +36,26 @@ async function fetchWithGracefulError(url: string, options: RequestInit) {
 export async function fetchTimeline(
   session: Session,
   startDate: string,
-  endDate: string
+  endDate: string,
+  filters?: { activityTypes?: string[]; search?: string }
 ) {
   const startISO = `${startDate}T00:00:00.000Z`;
   const endISO = `${endDate}T23:59:59.999Z`;
 
+  const params = new URLSearchParams({
+    start_date: startISO,
+    end_date: endISO,
+  });
+
+  if (filters?.activityTypes && filters.activityTypes.length > 0) {
+    params.set('activity_type', filters.activityTypes.join(','));
+  }
+  if (filters?.search) {
+    params.set('search', filters.search);
+  }
+
   return fetchWithGracefulError(
-    `${API_URL}/timeline?start_date=${startISO}&end_date=${endISO}`,
+    `${API_URL}/timeline?${params.toString()}`,
     {
       headers: {
         Authorization: `Bearer ${session.access_token}`,
@@ -50,6 +63,7 @@ export async function fetchTimeline(
     }
   );
 }
+
 
 export async function fetchSummary(session: Session, date: string) {
   return fetchWithGracefulError(`${API_URL}/summary?date=${date}`, {
