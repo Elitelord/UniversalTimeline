@@ -210,9 +210,12 @@ out/
 *.dll
 *.pdb
 .vs/
+bin/
+obj/
 TestResults/
 _ReSharper*/
 *.dotCover
 *.resharper
 *.opendb
 packages/
+*.csproj.user
