@@ -13,10 +13,10 @@ export class CreateEventDto {
   @IsNotEmpty()
   id: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(255)
-  user_id: string;
+  user_id?: string;
 
   @IsString()
   @IsNotEmpty()
