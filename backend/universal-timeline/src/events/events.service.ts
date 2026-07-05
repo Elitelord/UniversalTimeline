@@ -94,53 +94,98 @@ export class EventsService {
       .take(limit)
       .getMany();
   }
-  async getSummary(user_id: string, date:string ) {
-    const query = await this.eventRepository
-      .createQueryBuilder('event')
-      .where('event.user_id = :user_id', { user_id })
-      .andWhere('event.start_time >= :date', { date })
-      .andWhere("event.start_time < CAST(:date AS date) + INTERVAL '1 day'", { date })
-      .andWhere('event.end_time IS NOT NULL')
-      .select('event.activity_type')
-      .addSelect('SUM(EXTRACT(EPOCH FROM (event.end_time - event.start_time)) / 60)', 'duration')
-      .addSelect('COUNT(*)', 'count')
-      .groupBy('event.activity_type')
-      .orderBy('duration', 'DESC')
-      .getRawMany();
-    const queryTwo = await this.eventRepository
-      .createQueryBuilder('event')
-      .where('event.user_id = :user_id', { user_id })
-      .andWhere('event.start_time >= :date', { date })
-      .andWhere("event.start_time < CAST(:date AS date) + INTERVAL '1 day'", { date })
-      .andWhere('event.end_time IS NOT NULL')
-      .select('event.activity_name')
-      .addSelect('MAX(event.activity_type)', 'activity_type')
-      .addSelect('SUM(EXTRACT(EPOCH FROM (event.end_time - event.start_time)) / 60)', 'total_minutes')
-      .groupBy('event.activity_name')
-      .orderBy('total_minutes', 'DESC')
-      .limit(5)
-      .getRawMany();
-    let totalMinutes = 0;
-    for (const act of query) {
-      totalMinutes += parseFloat(act.duration);
+  async getSummary(
+    user_id: string,
+    options: {
+      start_date: string;
+      end_date: string;
+      compare_start_date?: string;
+      compare_end_date?: string;
+    }
+  ) {
+    const getPeriodData = async (start: string, end: string) => {
+      // breakdown query
+      const breakdown = await this.eventRepository
+        .createQueryBuilder('event')
+        .where('event.user_id = :user_id', { user_id })
+        .andWhere('event.start_time >= :start', { start })
+        .andWhere("event.start_time < CAST(:end AS date) + INTERVAL '1 day'", { end })
+        .andWhere('event.end_time IS NOT NULL')
+        .select('event.activity_type')
+        .addSelect('SUM(EXTRACT(EPOCH FROM (event.end_time - event.start_time)) / 60)', 'duration')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('event.activity_type')
+        .orderBy('duration', 'DESC')
+        .getRawMany();
+
+      // top applications query
+      const topApps = await this.eventRepository
+        .createQueryBuilder('event')
+        .where('event.user_id = :user_id', { user_id })
+        .andWhere('event.start_time >= :start', { start })
+        .andWhere("event.start_time < CAST(:end AS date) + INTERVAL '1 day'", { end })
+        .andWhere('event.end_time IS NOT NULL')
+        .select('event.activity_name')
+        .addSelect('MAX(event.activity_type)', 'activity_type')
+        .addSelect('SUM(EXTRACT(EPOCH FROM (event.end_time - event.start_time)) / 60)', 'total_minutes')
+        .groupBy('event.activity_name')
+        .orderBy('total_minutes', 'DESC')
+        .limit(5)
+        .getRawMany();
+
+      // time-series query for line charts
+      const timeSeries = await this.eventRepository
+        .createQueryBuilder('event')
+        .where('event.user_id = :user_id', { user_id })
+        .andWhere('event.start_time >= :start', { start })
+        .andWhere("event.start_time < CAST(:end AS date) + INTERVAL '1 day'", { end })
+        .andWhere('event.end_time IS NOT NULL')
+        .select("TO_CHAR(event.start_time, 'YYYY-MM-DD')", 'date')
+        .addSelect('event.activity_type', 'activity_type')
+        .addSelect('SUM(EXTRACT(EPOCH FROM (event.end_time - event.start_time)) / 60)', 'duration')
+        .groupBy("TO_CHAR(event.start_time, 'YYYY-MM-DD')")
+        .addGroupBy('event.activity_type')
+        .orderBy("TO_CHAR(event.start_time, 'YYYY-MM-DD')", 'ASC')
+        .getRawMany();
+
+      let totalMinutes = 0;
+      for (const act of breakdown) {
+        totalMinutes += parseFloat(act.duration);
+      }
+
+      return {
+        total_active_time_minutes: totalMinutes,
+        activity_breakdown: breakdown.map(act => ({
+          activity_type: act.event_activity_type,
+          total_minutes: parseFloat(act.duration),
+          event_count: parseInt(act.count),
+        })),
+        top_applications: topApps.map(app => ({
+          activity_name: app.event_activity_name,
+          activity_type: app.activity_type,
+          total_minutes: parseFloat(app.total_minutes),
+        })),
+        time_series: timeSeries.map(ts => ({
+          date: ts.date,
+          activity_type: ts.activity_type,
+          total_minutes: parseFloat(ts.duration),
+        })),
+      };
+    };
+
+    const current_period = await getPeriodData(options.start_date, options.end_date);
+    let comparison_period: any = null;
+
+    if (options.compare_start_date && options.compare_end_date) {
+      comparison_period = await getPeriodData(options.compare_start_date, options.compare_end_date);
     }
 
-    const summary = {
-      user_id: user_id,
-      date: date,
-      total_active_time_minutes: totalMinutes,
-      activity_breakdown: query.map(act => ({
-        activity_type: act.event_activity_type,
-        total_minutes: parseFloat(act.duration),
-        event_count: parseInt(act.count),
-      })),
-      top_applications: queryTwo.map(app => ({
-        activity_name: app.event_activity_name,
-        activity_type: app.activity_type,
-        total_minutes: parseFloat(app.total_minutes),
-      })),
-    }
-
-    return summary;
+    return {
+      user_id,
+      start_date: options.start_date,
+      end_date: options.end_date,
+      current_period,
+      comparison_period,
+    };
   }
 }

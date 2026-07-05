@@ -65,8 +65,24 @@ export async function fetchTimeline(
 }
 
 
-export async function fetchSummary(session: Session, date: string) {
-  return fetchWithGracefulError(`${API_URL}/summary?date=${date}`, {
+export async function fetchSummary(
+  session: Session, 
+  startDate: string,
+  endDate: string,
+  compareStartDate?: string,
+  compareEndDate?: string
+) {
+  const params = new URLSearchParams({
+    start_date: startDate,
+    end_date: endDate,
+  });
+
+  if (compareStartDate && compareEndDate) {
+    params.set('compare_start_date', compareStartDate);
+    params.set('compare_end_date', compareEndDate);
+  }
+
+  return fetchWithGracefulError(`${API_URL}/summary?${params.toString()}`, {
     headers: {
       Authorization: `Bearer ${session.access_token}`,
     },

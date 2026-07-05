@@ -58,16 +58,37 @@ export default function TimelineView({ events, date }: TimelineViewProps) {
     const handleWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
-        setZoomLevel(prev => {
-          const delta = e.deltaY > 0 ? -0.1 : 0.1;
-          return Math.max(0.5, Math.min(3, prev + delta));
-        });
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        handleZoom(delta);
       }
     };
 
     container.addEventListener('wheel', handleWheel, { passive: false });
     return () => container.removeEventListener('wheel', handleWheel);
   }, []);
+
+  const handleZoom = (delta: number) => {
+    const container = containerRef.current;
+    if (!container) return;
+    
+    setZoomLevel(prev => {
+      const newZoom = Math.max(0.5, Math.min(3, prev + delta));
+      if (newZoom !== prev) {
+        const oldHourHeight = 80 * prev;
+        const newHourHeight = 80 * newZoom;
+        const centerHour = (container.scrollTop + container.clientHeight / 2) / oldHourHeight;
+        const newScrollTop = (centerHour * newHourHeight) - (container.clientHeight / 2);
+        
+        requestAnimationFrame(() => {
+          if (containerRef.current) containerRef.current.scrollTop = newScrollTop;
+        });
+      }
+      return newZoom;
+    });
+  };
+
+  const zoomIn = () => handleZoom(0.25);
+  const zoomOut = () => handleZoom(-0.25);
 
   // Initial scroll to center on current block (Block 1)
   useEffect(() => {
@@ -91,7 +112,7 @@ export default function TimelineView({ events, date }: TimelineViewProps) {
         }
       }, 50);
     }
-  }, [date, events.length, blockHeight, hourHeight]);
+  }, [date, events.length]); // Intentionally omitting blockHeight/hourHeight to prevent jumping on zoom
 
   // Infinite scroll loop handler
   const handleScroll = (e: UIEvent<HTMLDivElement>) => {
@@ -107,22 +128,27 @@ export default function TimelineView({ events, date }: TimelineViewProps) {
     }
   };
 
-  const zoomIn = () => setZoomLevel(p => Math.min(3, p + 0.25));
-  const zoomOut = () => setZoomLevel(p => Math.max(0.5, p - 0.25));
-
   // Calculate positions and resolve visual overlaps
   const positionedEvents = useMemo(() => {
     const dayStart = new Date(date + 'T00:00:00');
 
     const basicEvents = events
-      .filter((e) => e.end_time)
+      .filter((e) => {
+        if (!e.end_time) return false;
+        const diffMs = new Date(e.end_time).getTime() - new Date(e.start_time).getTime();
+        return diffMs >= 60000; // Filter out events less than 1 minute
+      })
       .map((event) => {
         const start = new Date(event.start_time);
         const end = new Date(event.end_time!);
         const startHour = (start.getTime() - dayStart.getTime()) / 3600000;
         const endHour = (end.getTime() - dayStart.getTime()) / 3600000;
         const top = Math.max(0, startHour) * hourHeight;
-        const height = Math.max((endHour - Math.max(0, startHour)) * hourHeight, 22);
+        
+        const actualHeight = (endHour - Math.max(0, startHour)) * hourHeight;
+        // Strict scaling with zoom. Min 2px so it renders, but otherwise completely dynamic based on actual duration.
+        const height = Math.max(actualHeight, 2);
+        
         const colors = ACTIVITY_COLORS[event.activity_type] || DEFAULT_COLOR;
 
         return { ...event, top, height, colors, startDate: start, endDate: end, column: 0, columnsCount: 1 };
@@ -204,13 +230,28 @@ export default function TimelineView({ events, date }: TimelineViewProps) {
 
         {/* Timeline grid + events */}
         <div className="flex-1 relative h-full border-l border-zinc-800/40">
-          {/* Hour grid lines */}
+          {/* Hour grid lines & Minute ticks */}
           {HOURS.map((hour) => (
-            <div
-              key={hour}
-              className="absolute left-0 right-0 border-t border-dashed border-zinc-800/60"
-              style={{ top: hour * hourHeight }}
-            />
+            <div key={hour}>
+              <div
+                className="absolute left-0 right-0 border-t border-dashed border-zinc-800/60"
+                style={{ top: hour * hourHeight }}
+              />
+              {zoomLevel >= 1.5 && [15, 30, 45].map(min => (
+                <div 
+                  key={`${hour}-${min}`}
+                  className={`absolute left-0 right-0 border-t border-solid ${min === 30 ? 'border-zinc-800/40' : 'border-zinc-800/20'}`} 
+                  style={{ top: (hour + min / 60) * hourHeight }} 
+                />
+              ))}
+              {zoomLevel >= 2.5 && [5, 10, 20, 25, 35, 40, 50, 55].map(min => (
+                <div 
+                  key={`${hour}-${min}`}
+                  className="absolute left-0 right-0 border-t border-solid border-zinc-800/10" 
+                  style={{ top: (hour + min / 60) * hourHeight }} 
+                />
+              ))}
+            </div>
           ))}
 
           {/* Current time indicator */}
@@ -235,10 +276,12 @@ export default function TimelineView({ events, date }: TimelineViewProps) {
                   width: `calc(${widthPercent}% - 8px)`
                 }}
               >
-                <div className="px-3 py-1 h-full flex flex-col justify-center">
-                  <div className={`text-xs font-medium truncate ${event.colors.text}`}>
-                    {event.activity_name}
-                  </div>
+                <div className="px-3 py-1 h-full flex flex-col justify-center overflow-hidden">
+                  {event.height > 14 && (
+                    <div className={`text-xs font-medium truncate ${event.colors.text}`}>
+                      {event.activity_name}
+                    </div>
+                  )}
                   {event.height > 35 && (
                     <div className="text-[9px] text-zinc-500 truncate">
                       {formatTime(event.startDate as Date)} – {formatTime(event.endDate as Date)}

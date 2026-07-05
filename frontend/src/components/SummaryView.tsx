@@ -4,10 +4,11 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { fetchSummary } from '@/lib/api';
 import { 
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip, 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid 
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend,
+  LineChart, Line
 } from 'recharts';
-import { Clock, Activity, MonitorSmartphone } from 'lucide-react';
+import { Clock, Activity, MonitorSmartphone, Calendar, TrendingUp } from 'lucide-react';
 
 interface SummaryViewProps {
   date: string;
@@ -29,7 +30,7 @@ function formatTimeFromMinutes(mins: number) {
   return remaining > 0 ? `${hours}h ${remaining}m` : `${hours}h`;
 }
 
-// Custom Tooltip for Recharts Pie
+// Custom Tooltips
 const CustomPieTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
@@ -44,21 +45,67 @@ const CustomPieTooltip = ({ active, payload }: any) => {
   return null;
 };
 
-// Custom Tooltip for Recharts Bar
 const CustomBarTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 shadow-xl">
         <p className="text-sm font-medium text-zinc-100 mb-1">{label}</p>
-        <p className="text-xs text-zinc-400">Time spent: <span className="font-medium text-zinc-200">{formatTimeFromMinutes(payload[0].value)}</span></p>
+        {payload.map((p: any) => (
+          <p key={p.dataKey} className="text-xs text-zinc-400">
+            {p.name}: <span className="font-medium text-zinc-200" style={{ color: p.color }}>{formatTimeFromMinutes(p.value)}</span>
+          </p>
+        ))}
       </div>
     );
   }
   return null;
 };
 
+// Helpers for date ranges
+function getPeriodRanges(period: 'day' | 'week' | 'month', anchorDateStr: string) {
+  const anchor = new Date(anchorDateStr + 'T00:00:00');
+  let currentStart = new Date(anchor);
+  let currentEnd = new Date(anchor);
+  let compareStart = new Date(anchor);
+  let compareEnd = new Date(anchor);
+
+  if (period === 'day') {
+    compareStart.setDate(anchor.getDate() - 1);
+    compareEnd.setDate(anchor.getDate() - 1);
+  } else if (period === 'week') {
+    const day = anchor.getDay();
+    const diff = anchor.getDate() - day + (day === 0 ? -6 : 1);
+    currentStart = new Date(anchor.setDate(diff));
+    currentEnd = new Date(currentStart);
+    currentEnd.setDate(currentStart.getDate() + 6);
+    
+    compareStart = new Date(currentStart);
+    compareStart.setDate(currentStart.getDate() - 7);
+    compareEnd = new Date(currentEnd);
+    compareEnd.setDate(currentEnd.getDate() - 7);
+  } else if (period === 'month') {
+    currentStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    currentEnd = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
+    
+    compareStart = new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1);
+    compareEnd = new Date(anchor.getFullYear(), anchor.getMonth(), 0);
+  }
+
+  return {
+    start: currentStart.toISOString().split('T')[0],
+    end: currentEnd.toISOString().split('T')[0],
+    compareStart: compareStart.toISOString().split('T')[0],
+    compareEnd: compareEnd.toISOString().split('T')[0],
+  };
+}
+
 export default function SummaryView({ date }: SummaryViewProps) {
   const { session } = useAuth();
+  
+  // Local state for period and comparison
+  const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day');
+  const [isComparing, setIsComparing] = useState(false);
+  
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,7 +116,14 @@ export default function SummaryView({ date }: SummaryViewProps) {
       setLoading(true);
       setError(null);
       try {
-        const result = await fetchSummary(session, date);
+        const ranges = getPeriodRanges(period, date);
+        const result = await fetchSummary(
+          session, 
+          ranges.start, 
+          ranges.end, 
+          isComparing ? ranges.compareStart : undefined,
+          isComparing ? ranges.compareEnd : undefined
+        );
         setData(result);
       } catch (err: any) {
         setError(err.message);
@@ -78,7 +132,7 @@ export default function SummaryView({ date }: SummaryViewProps) {
       }
     }
     load();
-  }, [date, session]);
+  }, [date, period, isComparing, session]);
 
   if (loading) {
     return (
@@ -102,29 +156,94 @@ export default function SummaryView({ date }: SummaryViewProps) {
     );
   }
 
-  if (!data || data.total_active_time_minutes === 0) {
+  if (!data || data.current_period.total_active_time_minutes === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-zinc-500">
         <Activity className="w-12 h-12 mb-4 opacity-20" strokeWidth={1} />
         <p className="text-sm font-medium text-zinc-400">No activity recorded</p>
-        <p className="text-xs mt-1 text-zinc-600">Track some events to see your daily summary</p>
+        <p className="text-xs mt-1 text-zinc-600">Track some events to see your summary for this period.</p>
+        <div className="mt-4 flex gap-2 bg-zinc-900 p-1 rounded-lg">
+          {['day', 'week', 'month'].map(p => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p as any)}
+              className={`px-3 py-1 text-xs rounded-md capitalize ${period === p ? 'bg-zinc-800 text-zinc-200' : 'text-zinc-500'}`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
       </div>
     );
   }
 
+  const cp = data.current_period;
+  const cmp = data.comparison_period;
+
+  // Calculate Deltas
+  const totalDelta = cmp ? ((cp.total_active_time_minutes - cmp.total_active_time_minutes) / Math.max(1, cmp.total_active_time_minutes)) * 100 : 0;
+  
+  // Prepare Comparison Top Apps Data (Merge)
+  let topAppsData = cp.top_applications.map((app: any) => {
+    const compareApp = cmp?.top_applications.find((a: any) => a.activity_name === app.activity_name);
+    return {
+      activity_name: app.activity_name,
+      activity_type: app.activity_type,
+      current_minutes: app.total_minutes,
+      compare_minutes: compareApp ? compareApp.total_minutes : 0,
+    };
+  });
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       
+      {/* Controls Bar */}
+      <div className="flex flex-wrap gap-4 items-center justify-between bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-3 backdrop-blur-xl">
+        <div className="flex items-center gap-2 bg-zinc-950/50 p-1 rounded-lg border border-zinc-800/60">
+          {(['day', 'week', 'month'] as const).map(p => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={`px-4 py-1.5 text-sm font-medium rounded-md capitalize transition-colors ${
+                period === p 
+                  ? 'bg-zinc-800 text-zinc-100 shadow-sm' 
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
+              }`}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
+            <input 
+              type="checkbox" 
+              checked={isComparing} 
+              onChange={e => setIsComparing(e.target.checked)}
+              className="rounded bg-zinc-900 border-zinc-700 text-blue-500 focus:ring-blue-500/20 focus:ring-offset-zinc-950"
+            />
+            Compare to previous {period}
+          </label>
+        </div>
+      </div>
+
       {/* Top Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-5 backdrop-blur-xl">
           <div className="flex items-center gap-2 text-zinc-400 mb-2">
             <Clock className="w-4 h-4" />
             <span className="text-xs font-medium uppercase tracking-wider">Total Active Time</span>
           </div>
-          <p className="text-3xl font-semibold text-zinc-100">
-            {formatTimeFromMinutes(data.total_active_time_minutes)}
-          </p>
+          <div className="flex items-baseline gap-3">
+            <p className="text-3xl font-semibold text-zinc-100">
+              {formatTimeFromMinutes(cp.total_active_time_minutes)}
+            </p>
+            {isComparing && cmp && (
+              <span className={`text-sm font-medium ${totalDelta >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {totalDelta >= 0 ? '+' : ''}{totalDelta.toFixed(1)}%
+              </span>
+            )}
+          </div>
         </div>
         
         <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-5 backdrop-blur-xl">
@@ -133,10 +252,49 @@ export default function SummaryView({ date }: SummaryViewProps) {
             <span className="text-xs font-medium uppercase tracking-wider">Total Events</span>
           </div>
           <p className="text-3xl font-semibold text-zinc-100">
-            {data.activity_breakdown.reduce((acc: number, curr: any) => acc + curr.event_count, 0)}
+            {cp.activity_breakdown.reduce((acc: number, curr: any) => acc + curr.event_count, 0)}
           </p>
         </div>
       </div>
+
+      {/* Time Series Line Chart */}
+      {cp.time_series && cp.time_series.length > 0 && period !== 'day' && (
+        <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-6 backdrop-blur-xl flex flex-col">
+          <h3 className="text-sm font-medium text-zinc-100 mb-6 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-zinc-400" />
+            Trend over {period}
+          </h3>
+          <div className="w-full h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={
+                // Transform data: group by date, make activity_types as keys
+                Object.values(cp.time_series.reduce((acc: any, curr: any) => {
+                  if (!acc[curr.date]) acc[curr.date] = { date: curr.date };
+                  acc[curr.date][curr.activity_type] = curr.total_minutes;
+                  return acc;
+                }, {}))
+              }>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" />
+                <XAxis dataKey="date" tick={{ fill: '#a1a1aa', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <YAxis hide />
+                <RechartsTooltip content={<CustomBarTooltip />} cursor={{ fill: '#27272a', opacity: 0.1 }} />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: 12, color: '#a1a1aa' }} />
+                
+                {Object.keys(ACTIVITY_COLORS).map(type => (
+                  <Line 
+                    key={type}
+                    type="monotone" 
+                    dataKey={type} 
+                    stroke={ACTIVITY_COLORS[type]} 
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -151,7 +309,7 @@ export default function SummaryView({ date }: SummaryViewProps) {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={data.activity_breakdown}
+                  data={cp.activity_breakdown}
                   dataKey="total_minutes"
                   nameKey="activity_type"
                   cx="50%"
@@ -160,7 +318,7 @@ export default function SummaryView({ date }: SummaryViewProps) {
                   outerRadius={80}
                   paddingAngle={2}
                 >
-                  {data.activity_breakdown.map((entry: any, index: number) => (
+                  {cp.activity_breakdown.map((entry: any, index: number) => (
                     <Cell 
                       key={`cell-${index}`} 
                       fill={ACTIVITY_COLORS[entry.activity_type] || DEFAULT_COLOR} 
@@ -168,12 +326,12 @@ export default function SummaryView({ date }: SummaryViewProps) {
                     />
                   ))}
                 </Pie>
-                <Tooltip content={<CustomPieTooltip />} cursor={{ fill: 'transparent' }} />
+                <RechartsTooltip content={<CustomPieTooltip />} cursor={{ fill: 'transparent' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
           <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 justify-center">
-            {data.activity_breakdown.map((item: any) => (
+            {cp.activity_breakdown.map((item: any) => (
               <div key={item.activity_type} className="flex items-center gap-1.5">
                 <div 
                   className="w-2.5 h-2.5 rounded-full" 
@@ -194,7 +352,7 @@ export default function SummaryView({ date }: SummaryViewProps) {
           <div className="flex-1 min-h-[250px] -ml-4">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={data.top_applications}
+                data={topAppsData}
                 layout="vertical"
                 margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
               >
@@ -208,19 +366,29 @@ export default function SummaryView({ date }: SummaryViewProps) {
                   tick={{ fill: '#a1a1aa', fontSize: 12 }}
                   width={80}
                 />
-                <Tooltip content={<CustomBarTooltip />} cursor={{ fill: '#27272a', opacity: 0.4 }} />
+                <RechartsTooltip content={<CustomBarTooltip />} cursor={{ fill: '#27272a', opacity: 0.4 }} />
                 <Bar 
-                  dataKey="total_minutes" 
+                  dataKey="current_minutes" 
+                  name="Current Period"
                   radius={[0, 4, 4, 0]}
-                  barSize={24}
+                  barSize={16}
                 >
-                  {data.top_applications.map((entry: any, index: number) => (
+                  {topAppsData.map((entry: any, index: number) => (
                     <Cell 
                       key={`cell-${index}`} 
                       fill={ACTIVITY_COLORS[entry.activity_type] || DEFAULT_COLOR} 
                     />
                   ))}
                 </Bar>
+                {isComparing && (
+                  <Bar 
+                    dataKey="compare_minutes" 
+                    name="Previous Period"
+                    fill="#3f3f46" // zinc-700
+                    radius={[0, 4, 4, 0]}
+                    barSize={16}
+                  />
+                )}
               </BarChart>
             </ResponsiveContainer>
           </div>
