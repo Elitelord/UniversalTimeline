@@ -1,0 +1,97 @@
+package com.example.universaltimeline.tracking
+
+import android.app.usage.UsageEvents
+import android.app.usage.UsageStatsManager
+import android.content.Context
+import android.util.Log
+
+/**
+ * Queries UsageStatsManager for app usage events and converts them into
+ * ActivityEvent objects with human-readable app names.
+ *
+ * Uses ACTIVITY_RESUMED / ACTIVITY_PAUSED event pairs to compute precise
+ * foreground time windows per app.
+ */
+class UsageTracker(private val context: Context) {
+
+  companion object {
+    private const val TAG = "UsageTracker"
+    private const val PREFS_NAME = "usage_tracker_prefs"
+    private const val KEY_LAST_QUERY_TIME = "last_query_time"
+  }
+
+  private val appNameResolver = AppNameResolver(context)
+  private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+  /**
+   * Collects app usage events since the last successful query.
+   * On first run, looks back 15 minutes.
+   */
+  fun collectEvents(): List<ActivityEvent> {
+    val usageStatsManager =
+      context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager
+
+    if (usageStatsManager == null) {
+      Log.e(TAG, "UsageStatsManager not available")
+      return emptyList()
+    }
+
+    val now = System.currentTimeMillis()
+    val lastQueryTime = prefs.getLong(KEY_LAST_QUERY_TIME, now - 15 * 60 * 1000)
+
+    val events = mutableListOf<ActivityEvent>()
+    // Track the most recent ACTIVITY_RESUMED per package to pair with PAUSED
+    val resumedAt = HashMap<String, Long>()
+
+    val usageEvents = usageStatsManager.queryEvents(lastQueryTime, now)
+    val event = UsageEvents.Event()
+
+    while (usageEvents.hasNextEvent()) {
+      usageEvents.getNextEvent(event)
+
+      when (event.eventType) {
+        UsageEvents.Event.ACTIVITY_RESUMED -> {
+          resumedAt[event.packageName] = event.timeStamp
+        }
+        UsageEvents.Event.ACTIVITY_PAUSED -> {
+          val startTime = resumedAt.remove(event.packageName)
+          if (startTime != null && event.timeStamp > startTime) {
+            val appName = appNameResolver.resolve(event.packageName)
+            events.add(
+              ActivityEvent(
+                activityType = "application",
+                activityName = appName,
+                startTime = startTime,
+                endTime = event.timeStamp,
+                packageName = event.packageName
+              )
+            )
+          }
+        }
+      }
+    }
+
+    // For apps that are still in the foreground (resumed but not yet paused),
+    // create an event ending at "now" — they'll get a proper end time next cycle.
+    for ((packageName, startTime) in resumedAt) {
+      if (now > startTime) {
+        val appName = appNameResolver.resolve(packageName)
+        events.add(
+          ActivityEvent(
+            activityType = "application",
+            activityName = appName,
+            startTime = startTime,
+            endTime = now,
+            packageName = packageName
+          )
+        )
+      }
+    }
+
+    // Save the query timestamp so the next run picks up where we left off
+    prefs.edit().putLong(KEY_LAST_QUERY_TIME, now).apply()
+
+    Log.i(TAG, "Collected ${events.size} events since ${java.util.Date(lastQueryTime)}")
+    return events
+  }
+}
