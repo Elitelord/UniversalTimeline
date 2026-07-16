@@ -1,18 +1,26 @@
 package com.example.universaltimeline.ui.main
 
 import android.app.AppOpsManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.provider.Settings
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +37,8 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.universaltimeline.theme.UniversalTimelineTheme
+import com.example.universaltimeline.tracking.NotificationTracker
+import com.example.universaltimeline.tracking.ScreenReceiver
 import com.example.universaltimeline.tracking.TrackingWorker
 import java.util.concurrent.TimeUnit
 
@@ -52,6 +62,12 @@ fun hasUsageStatsPermission(context: Context): Boolean {
     )
   }
   return mode == AppOpsManager.MODE_ALLOWED
+}
+
+fun hasNotificationAccess(context: Context): Boolean {
+  val cn = ComponentName(context, NotificationTracker::class.java)
+  val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+  return flat != null && flat.contains(cn.flattenToString())
 }
 
 private fun startTracking(context: Context) {
@@ -83,11 +99,31 @@ internal fun MainScreenContent(modifier: Modifier = Modifier) {
   val context = LocalContext.current
   val prefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
   var isTracking by remember { mutableStateOf(prefs.getBoolean(KEY_TRACKING_ENABLED, false)) }
+  var hasNotifAccess by remember { mutableStateOf(hasNotificationAccess(context)) }
 
   // On first composition, ensure WorkManager state matches persisted toggle
   LaunchedEffect(Unit) {
     if (isTracking && hasUsageStatsPermission(context)) {
       startTracking(context)
+    }
+  }
+
+  // Register/unregister ScreenReceiver when tracking is toggled
+  DisposableEffect(isTracking) {
+    val receiver = ScreenReceiver()
+    if (isTracking) {
+      val filter = IntentFilter().apply {
+        addAction(Intent.ACTION_SCREEN_ON)
+        addAction(Intent.ACTION_SCREEN_OFF)
+      }
+      context.registerReceiver(receiver, filter)
+    }
+    onDispose {
+      try {
+        context.unregisterReceiver(receiver)
+      } catch (_: IllegalArgumentException) {
+        // Receiver was not registered, ignore
+      }
     }
   }
 
@@ -97,6 +133,8 @@ internal fun MainScreenContent(modifier: Modifier = Modifier) {
       style = MaterialTheme.typography.headlineSmall
     )
     Spacer(modifier = Modifier.height(32.dp))
+
+    // -- Usage Tracking Toggle --
     Row(verticalAlignment = Alignment.CenterVertically) {
       Text("Track Activity")
       Spacer(modifier = Modifier.width(16.dp))
@@ -105,7 +143,6 @@ internal fun MainScreenContent(modifier: Modifier = Modifier) {
         onCheckedChange = { checked ->
           if (checked) {
             if (!hasUsageStatsPermission(context)) {
-              // Send user to settings to grant usage access
               context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
               })
@@ -134,6 +171,40 @@ internal fun MainScreenContent(modifier: Modifier = Modifier) {
         style = MaterialTheme.typography.bodySmall,
         color = Color.Gray
       )
+    }
+
+    Spacer(modifier = Modifier.height(24.dp))
+    HorizontalDivider(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+    Spacer(modifier = Modifier.height(24.dp))
+
+    // -- Notification Access --
+    Text(
+      text = "Notification Tracking",
+      style = MaterialTheme.typography.titleMedium
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+      text = if (hasNotifAccess) "✅ Notification access granted"
+             else "Notification access is required to track which apps send you notifications.",
+      style = MaterialTheme.typography.bodySmall,
+      color = if (hasNotifAccess) Color(0xFF4CAF50) else Color.Gray
+    )
+    if (!hasNotifAccess) {
+      Spacer(modifier = Modifier.height(8.dp))
+      Button(
+        onClick = {
+          context.startActivity(
+            Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+              flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+          )
+        },
+        colors = ButtonDefaults.buttonColors(
+          containerColor = MaterialTheme.colorScheme.primary
+        )
+      ) {
+        Text("Grant Notification Access")
+      }
     }
   }
 }

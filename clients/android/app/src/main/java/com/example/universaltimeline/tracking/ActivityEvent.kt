@@ -12,4 +12,6 @@ data class ActivityEvent(
   val metadata: Map<String, String> = emptyMap()
 ) {
   val durationMs: Long get() = endTime - startTime
+
+  companion object
 }
