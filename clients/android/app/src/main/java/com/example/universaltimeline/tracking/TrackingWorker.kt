@@ -4,16 +4,18 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.example.universaltimeline.sync.SyncQueue
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * Periodic background worker that collects app usage events using UsageTracker
- * and drains real-time events (notifications, screen on/off) from EventStore.
- * Runs every ~15 minutes via WorkManager (battery-efficient).
+ * Periodic background worker that:
+ * 1. Collects app usage events from UsageStatsManager
+ * 2. Drains real-time events (notifications, screen on/off) from EventStore
+ * 3. Syncs all events to the backend via SyncQueue
  *
- * Currently logs events to Logcat. Server sync will be added in Phase 8.4.
+ * Runs every ~15 minutes via WorkManager (battery-efficient).
  */
 class TrackingWorker(
   appContext: Context,
@@ -42,13 +44,27 @@ class TrackingWorker(
 
     if (allEvents.isEmpty()) {
       Log.i(TAG, "No new events collected.")
+      return Result.success()
+    }
+
+    Log.i(TAG, "=== Collected ${allEvents.size} events (${usageEvents.size} usage, ${realtimeEvents.size} realtime) ===")
+    for (event in allEvents.sortedBy { it.startTime }) {
+      val start = dateFormat.format(Date(event.startTime))
+      val end = dateFormat.format(Date(event.endTime))
+      val durationSec = event.durationMs / 1000
+      Log.i(TAG, "  [${event.activityType}] ${event.activityName} ($start - $end) [${durationSec}s]")
+    }
+
+    // 3. Sync to backend
+    val syncQueue = SyncQueue(applicationContext)
+    if (syncQueue.isConfigured()) {
+      val synced = syncQueue.flush(allEvents)
+      Log.i(TAG, "Synced $synced/${allEvents.size} events to server")
     } else {
-      Log.i(TAG, "=== Collected ${allEvents.size} events (${usageEvents.size} usage, ${realtimeEvents.size} realtime) ===")
-      for (event in allEvents.sortedBy { it.startTime }) {
-        val start = dateFormat.format(Date(event.startTime))
-        val end = dateFormat.format(Date(event.endTime))
-        val durationSec = event.durationMs / 1000
-        Log.i(TAG, "  [${event.activityType}] ${event.activityName} ($start - $end) [${durationSec}s]")
+      // Not configured yet — re-add events to store so they aren't lost
+      Log.w(TAG, "Sync not configured, re-queuing ${allEvents.size} events")
+      for (event in allEvents) {
+        eventStore.addEvent(event)
       }
     }
 

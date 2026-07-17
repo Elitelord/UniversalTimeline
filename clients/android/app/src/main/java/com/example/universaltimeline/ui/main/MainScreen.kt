@@ -13,10 +13,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,12 +34,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.example.universaltimeline.sync.SyncQueue
 import com.example.universaltimeline.theme.UniversalTimelineTheme
 import com.example.universaltimeline.tracking.NotificationTracker
 import com.example.universaltimeline.tracking.ScreenReceiver
@@ -101,6 +107,13 @@ internal fun MainScreenContent(modifier: Modifier = Modifier) {
   var isTracking by remember { mutableStateOf(prefs.getBoolean(KEY_TRACKING_ENABLED, false)) }
   var hasNotifAccess by remember { mutableStateOf(hasNotificationAccess(context)) }
 
+  // Sync configuration
+  val syncQueue = remember { SyncQueue(context) }
+  var serverUrl by remember { mutableStateOf(syncQueue.getServerUrl()) }
+  var authToken by remember { mutableStateOf(syncQueue.getAuthToken()) }
+  var isSyncConfigured by remember { mutableStateOf(syncQueue.isConfigured()) }
+  var syncSaveMessage by remember { mutableStateOf("") }
+
   // On first composition, ensure WorkManager state matches persisted toggle
   LaunchedEffect(Unit) {
     if (isTracking && hasUsageStatsPermission(context)) {
@@ -127,7 +140,10 @@ internal fun MainScreenContent(modifier: Modifier = Modifier) {
     }
   }
 
-  Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+  Column(
+    modifier = modifier.verticalScroll(rememberScrollState()),
+    horizontalAlignment = Alignment.CenterHorizontally
+  ) {
     Text(
       text = "Universal Timeline",
       style = MaterialTheme.typography.headlineSmall
@@ -206,6 +222,94 @@ internal fun MainScreenContent(modifier: Modifier = Modifier) {
         Text("Grant Notification Access")
       }
     }
+
+    Spacer(modifier = Modifier.height(24.dp))
+    HorizontalDivider(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+    Spacer(modifier = Modifier.height(24.dp))
+
+    // -- Server Sync Configuration --
+    Text(
+      text = "Server Sync",
+      style = MaterialTheme.typography.titleMedium
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+
+    if (isSyncConfigured) {
+      Text(
+        text = "✅ Sync configured",
+        style = MaterialTheme.typography.bodySmall,
+        color = Color(0xFF4CAF50)
+      )
+      Spacer(modifier = Modifier.height(4.dp))
+      Text(
+        text = "Device ID: ${syncQueue.getDeviceId()}",
+        style = MaterialTheme.typography.bodySmall,
+        color = Color.Gray
+      )
+    }
+
+    Spacer(modifier = Modifier.height(8.dp))
+    OutlinedTextField(
+      value = serverUrl,
+      onValueChange = { serverUrl = it },
+      label = { Text("Server URL") },
+      placeholder = { Text("http://192.168.1.x:3000") },
+      singleLine = true,
+      modifier = Modifier.fillMaxWidth()
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    OutlinedTextField(
+      value = authToken,
+      onValueChange = { authToken = it },
+      label = { Text("Auth Token (JWT)") },
+      placeholder = { Text("Paste your Supabase JWT here") },
+      singleLine = true,
+      visualTransformation = PasswordVisualTransformation(),
+      modifier = Modifier.fillMaxWidth()
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+
+    Row {
+      Button(
+        onClick = {
+          if (serverUrl.isNotBlank() && authToken.isNotBlank()) {
+            syncQueue.configure(serverUrl.trim(), authToken.trim())
+            isSyncConfigured = true
+            syncSaveMessage = "✅ Saved!"
+          } else {
+            syncSaveMessage = "⚠️ Both fields required"
+          }
+        }
+      ) {
+        Text("Save")
+      }
+
+      if (isSyncConfigured) {
+        Spacer(modifier = Modifier.width(12.dp))
+        OutlinedButton(
+          onClick = {
+            syncQueue.configure("", "")
+            serverUrl = ""
+            authToken = ""
+            isSyncConfigured = false
+            syncSaveMessage = "Cleared"
+          }
+        ) {
+          Text("Clear")
+        }
+      }
+    }
+
+    if (syncSaveMessage.isNotEmpty()) {
+      Spacer(modifier = Modifier.height(8.dp))
+      Text(
+        text = syncSaveMessage,
+        style = MaterialTheme.typography.bodySmall,
+        color = Color.Gray
+      )
+    }
+
+    Spacer(modifier = Modifier.height(32.dp))
   }
 }
 
