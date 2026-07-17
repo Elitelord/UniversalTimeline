@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import com.example.universaltimeline.tracking.ActivityEvent
 import com.example.universaltimeline.tracking.EventStore
-import com.example.universaltimeline.tracking.toJson
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.OutputStreamWriter
@@ -18,10 +17,10 @@ import java.util.UUID
 
 /**
  * Sync queue that batches ActivityEvents and flushes them to the backend API.
- * Implements exponential backoff on failure (1s, 2s, 4s, 8s... max 60s).
+ * Uses SupabaseAuth for authentication (auto-refreshing JWT).
+ * Implements exponential backoff on failure.
  *
- * Events that fail to sync are returned to the EventStore for retry on the next
- * WorkManager cycle.
+ * Events that fail to sync are returned to the EventStore for retry.
  */
 class SyncQueue(private val context: Context) {
 
@@ -29,7 +28,6 @@ class SyncQueue(private val context: Context) {
     private const val TAG = "SyncQueue"
     private const val PREFS_NAME = "sync_queue_prefs"
     private const val KEY_SERVER_URL = "server_url"
-    private const val KEY_AUTH_TOKEN = "auth_token"
     private const val KEY_DEVICE_ID = "device_id"
     private const val KEY_BACKOFF_MS = "backoff_ms"
     private const val MAX_BATCH_SIZE = 50
@@ -38,19 +36,19 @@ class SyncQueue(private val context: Context) {
   }
 
   private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+  private val auth = SupabaseAuth(context)
   private val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
     timeZone = TimeZone.getTimeZone("UTC")
   }
 
   /**
-   * Returns true if sync is configured (server URL and auth token set).
+   * Returns true if sync is ready (server URL configured and user logged in).
    */
   fun isConfigured(): Boolean {
-    return getServerUrl().isNotEmpty() && getAuthToken().isNotEmpty()
+    return getServerUrl().isNotEmpty() && auth.isLoggedIn()
   }
 
   fun getServerUrl(): String = prefs.getString(KEY_SERVER_URL, "") ?: ""
-  fun getAuthToken(): String = prefs.getString(KEY_AUTH_TOKEN, "") ?: ""
 
   fun getDeviceId(): String {
     var id = prefs.getString(KEY_DEVICE_ID, null)
@@ -61,34 +59,37 @@ class SyncQueue(private val context: Context) {
     return id
   }
 
-  fun configure(serverUrl: String, authToken: String) {
-    prefs.edit()
-      .putString(KEY_SERVER_URL, serverUrl.trimEnd('/'))
-      .putString(KEY_AUTH_TOKEN, authToken)
-      .apply()
-    Log.i(TAG, "Sync configured: $serverUrl")
+  fun setServerUrl(serverUrl: String) {
+    prefs.edit().putString(KEY_SERVER_URL, serverUrl.trimEnd('/')).apply()
+    Log.i(TAG, "Server URL set: $serverUrl")
   }
 
   /**
    * Attempt to flush events to the backend. Returns the number of events
    * successfully synced. Failed events are re-added to the EventStore.
    */
-  fun flush(events: List<ActivityEvent>): Int {
+  suspend fun flush(events: List<ActivityEvent>): Int {
     if (events.isEmpty()) return 0
     if (!isConfigured()) {
       Log.w(TAG, "Sync not configured, skipping flush")
       return 0
     }
 
+    // Get a valid (auto-refreshed) token
+    val token = auth.getValidToken()
+    if (token == null) {
+      Log.w(TAG, "No valid auth token, skipping flush")
+      return 0
+    }
+
     val deviceId = getDeviceId()
     var totalSynced = 0
 
-    // Process in batches of MAX_BATCH_SIZE
     val batches = events.chunked(MAX_BATCH_SIZE)
     val failedEvents = mutableListOf<ActivityEvent>()
 
     for (batch in batches) {
-      val success = sendBatch(batch, deviceId)
+      val success = sendBatch(batch, deviceId, token)
       if (success) {
         totalSynced += batch.size
         resetBackoff()
@@ -97,12 +98,10 @@ class SyncQueue(private val context: Context) {
         failedEvents.addAll(batch)
         increaseBackoff()
         Log.w(TAG, "Failed to sync batch of ${batch.size} events, will retry")
-        // Stop trying further batches on failure
         break
       }
     }
 
-    // Re-add failed events to the store for next cycle
     if (failedEvents.isNotEmpty()) {
       val eventStore = EventStore(context)
       for (event in failedEvents) {
@@ -114,7 +113,7 @@ class SyncQueue(private val context: Context) {
     return totalSynced
   }
 
-  private fun sendBatch(events: List<ActivityEvent>, deviceId: String): Boolean {
+  private fun sendBatch(events: List<ActivityEvent>, deviceId: String, token: String): Boolean {
     return try {
       val jsonArray = JSONArray()
       for (event in events) {
@@ -141,7 +140,7 @@ class SyncQueue(private val context: Context) {
       val conn = url.openConnection() as HttpURLConnection
       conn.requestMethod = "POST"
       conn.setRequestProperty("Content-Type", "application/json")
-      conn.setRequestProperty("Authorization", "Bearer ${getAuthToken()}")
+      conn.setRequestProperty("Authorization", "Bearer $token")
       conn.doOutput = true
       conn.connectTimeout = 10_000
       conn.readTimeout = 10_000
