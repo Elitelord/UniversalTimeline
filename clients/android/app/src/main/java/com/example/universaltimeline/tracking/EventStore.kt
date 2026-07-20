@@ -26,10 +26,34 @@ class EventStore(context: Context) {
    */
   @Synchronized
   fun addEvent(event: ActivityEvent) {
+    addEvents(listOf(event))
+  }
+
+  /**
+   * Append a list of events to the local store in a single batch transaction.
+   * Caps the total pending queue at 1000 events to prevent high disk I/O and battery drain.
+   */
+  @Synchronized
+  fun addEvents(newEvents: List<ActivityEvent>) {
+    if (newEvents.isEmpty()) return
     val arr = loadArray()
-    arr.put(event.toJson())
-    prefs.edit().putString(KEY_EVENTS, arr.toString()).apply()
-    Log.d(TAG, "Stored event: ${event.activityType} / ${event.activityName}")
+    for (event in newEvents) {
+      arr.put(event.toJson())
+    }
+
+    val maxCap = 1000
+    if (arr.length() > maxCap) {
+      val trimmedArr = JSONArray()
+      val startIdx = arr.length() - maxCap
+      for (i in startIdx until arr.length()) {
+        trimmedArr.put(arr.get(i))
+      }
+      prefs.edit().putString(KEY_EVENTS, trimmedArr.toString()).apply()
+      Log.w(TAG, "EventStore capped: trimmed down to $maxCap events to save battery")
+    } else {
+      prefs.edit().putString(KEY_EVENTS, arr.toString()).apply()
+      Log.d(TAG, "Stored ${newEvents.size} events in batch")
+    }
   }
 
   /**

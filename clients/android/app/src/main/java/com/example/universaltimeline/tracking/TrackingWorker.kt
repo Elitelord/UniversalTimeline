@@ -30,6 +30,12 @@ class TrackingWorker(
   private val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
   override suspend fun doWork(): Result {
+    val syncQueue = SyncQueue(applicationContext)
+    if (!syncQueue.isConfigured()) {
+      Log.i(TAG, "Sync is not configured yet. Skipping tracking cycle to save battery.")
+      return Result.success()
+    }
+
     Log.i(TAG, "TrackingWorker starting...")
 
     // 1. Collect app usage events from UsageStatsManager
@@ -56,17 +62,8 @@ class TrackingWorker(
     }
 
     // 3. Sync to backend
-    val syncQueue = SyncQueue(applicationContext)
-    if (syncQueue.isConfigured()) {
-      val synced = syncQueue.flush(allEvents)
-      Log.i(TAG, "Synced $synced/${allEvents.size} events to server")
-    } else {
-      // Not configured yet — re-add events to store so they aren't lost
-      Log.w(TAG, "Sync not configured, re-queuing ${allEvents.size} events")
-      for (event in allEvents) {
-        eventStore.addEvent(event)
-      }
-    }
+    val synced = syncQueue.flush(allEvents)
+    Log.i(TAG, "Synced $synced/${allEvents.size} events to server")
 
     return Result.success()
   }

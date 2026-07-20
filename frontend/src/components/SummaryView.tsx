@@ -354,7 +354,7 @@ export default function SummaryView({ date }: SummaryViewProps) {
               <BarChart
                 data={topAppsData}
                 layout="vertical"
-                margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
+                margin={{ top: 0, right: 20, left: 10, bottom: 0 }}
               >
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#27272a" />
                 <XAxis type="number" hide />
@@ -363,8 +363,25 @@ export default function SummaryView({ date }: SummaryViewProps) {
                   type="category" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#a1a1aa', fontSize: 12 }}
-                  width={80}
+                  tick={(props: any) => {
+                    const { x, y, payload } = props;
+                    const value = payload.value || '';
+                    const displayValue = value.length > 22 ? `${value.slice(0, 19)}...` : value;
+                    return (
+                      <g transform={`translate(${x},${y})`}>
+                        <text
+                          x={-130}
+                          y={4}
+                          fill="#a1a1aa"
+                          fontSize={11}
+                          textAnchor="start"
+                        >
+                          {displayValue}
+                        </text>
+                      </g>
+                    );
+                  }}
+                  width={140}
                 />
                 <RechartsTooltip content={<CustomBarTooltip />} cursor={{ fill: '#27272a', opacity: 0.4 }} />
                 <Bar 

@@ -6,8 +6,8 @@ namespace UniversalTimeline.Client;
 
 public class SupabaseAuth
 {
-    private const string SupabaseUrl = "https://qjkufvesemhghxiclynn.supabase.co";
-    private const string SupabaseAnonKey = "sb_publishable_2iPnbc6qLlNFcOAzwSP8EQ_GviSR4bX";
+    private static readonly string SupabaseUrl = Environment.GetEnvironmentVariable("SUPABASE_URL") ?? "";
+    private static readonly string SupabaseAnonKey = Environment.GetEnvironmentVariable("SUPABASE_ANON_KEY") ?? "";
 
     private readonly HttpClient _authClient;
     private readonly string _sessionFilePath;

@@ -130,7 +130,7 @@ export default function TimelineView({ events, date }: TimelineViewProps) {
 
   // Calculate positions and resolve visual overlaps
   const positionedEvents = useMemo(() => {
-    const dayStart = new Date(date + 'T00:00:00');
+    const dayStart = new Date(date + 'T00:00:00.000Z');
 
     const basicEvents = events
       .filter((e) => {
@@ -146,8 +146,8 @@ export default function TimelineView({ events, date }: TimelineViewProps) {
         const top = Math.max(0, startHour) * hourHeight;
         
         const actualHeight = (endHour - Math.max(0, startHour)) * hourHeight;
-        // Strict scaling with zoom. Min 2px so it renders, but otherwise completely dynamic based on actual duration.
-        const height = Math.max(actualHeight, 2);
+        // Strict scaling with zoom. Min 6px so it renders as a clickable capsule.
+        const height = Math.max(actualHeight, 6);
         
         const colors = ACTIVITY_COLORS[event.activity_type] || DEFAULT_COLOR;
 
@@ -277,7 +277,7 @@ export default function TimelineView({ events, date }: TimelineViewProps) {
                 }}
               >
                 <div className="px-3 py-1 h-full flex flex-col justify-center overflow-hidden">
-                  {event.height > 14 && (
+                  {event.height > 10 && (
                     <div className={`text-xs font-medium truncate ${event.colors.text}`}>
                       {event.activity_name}
                     </div>

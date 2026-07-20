@@ -14,6 +14,9 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
 
 /**
  * Sync queue that batches ActivityEvents and flushes them to the backend API.
@@ -68,18 +71,18 @@ class SyncQueue(private val context: Context) {
    * Attempt to flush events to the backend. Returns the number of events
    * successfully synced. Failed events are re-added to the EventStore.
    */
-  suspend fun flush(events: List<ActivityEvent>): Int {
-    if (events.isEmpty()) return 0
+  suspend fun flush(events: List<ActivityEvent>): Int = withContext(Dispatchers.IO) {
+    if (events.isEmpty()) return@withContext 0
     if (!isConfigured()) {
       Log.w(TAG, "Sync not configured, skipping flush")
-      return 0
+      return@withContext 0
     }
 
     // Get a valid (auto-refreshed) token
     val token = auth.getValidToken()
     if (token == null) {
       Log.w(TAG, "No valid auth token, skipping flush")
-      return 0
+      return@withContext 0
     }
 
     val deviceId = getDeviceId()
@@ -104,13 +107,11 @@ class SyncQueue(private val context: Context) {
 
     if (failedEvents.isNotEmpty()) {
       val eventStore = EventStore(context)
-      for (event in failedEvents) {
-        eventStore.addEvent(event)
-      }
-      Log.w(TAG, "Re-queued ${failedEvents.size} failed events")
+      eventStore.addEvents(failedEvents)
+      Log.w(TAG, "Re-queued ${failedEvents.size} failed events in batch")
     }
 
-    return totalSynced
+    return@withContext totalSynced
   }
 
   private fun sendBatch(events: List<ActivityEvent>, deviceId: String, token: String): Boolean {
