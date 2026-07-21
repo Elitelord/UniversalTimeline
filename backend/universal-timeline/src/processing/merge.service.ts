@@ -23,8 +23,8 @@ export class MergeService {
             if (lastActive) {
                 const diff = event.start_time.getTime() - lastActive.end_time.getTime();
                 
-                // If the gap is small enough (<= 5 minutes = 300,000 ms), merge them!
-                if (diff <= 300000) {
+                // If the gap is small enough (<= 60 seconds = 60,000 ms), merge them!
+                if (diff <= 60000) {
                     if (event.end_time.getTime() > lastActive.end_time.getTime()) {
                         lastActive.end_time = event.end_time;
                     }

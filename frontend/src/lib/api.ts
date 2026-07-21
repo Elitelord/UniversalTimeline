@@ -1,6 +1,6 @@
 import { Session } from '@supabase/supabase-js';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 async function fetchWithGracefulError(url: string, options: RequestInit) {
   let res: Response;
