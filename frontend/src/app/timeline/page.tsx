@@ -25,6 +25,7 @@ export default function TimelinePage() {
   const [events, setEvents] = useState<any[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [demoMode, setDemoMode] = useState(false);
 
   // Filter state
   const [activeTypes, setActiveTypes] = useState<string[]>([]);
@@ -63,6 +64,7 @@ export default function TimelinePage() {
       if (debouncedSearch) filters.search = debouncedSearch;
 
       const data = await fetchTimeline(session, date, date, filters);
+      setDemoMode(!!(data as any).__demo);
       setEvents(data);
     } catch (err: any) {
       setError(err.message);
@@ -285,7 +287,18 @@ export default function TimelinePage() {
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'timeline' ? (
           <div className="px-6 py-6 h-full flex flex-col">
-            {error && (
+            {demoMode && (
+              <div className="mb-4 px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-3">
+                <div className="p-1.5 bg-amber-500/10 rounded-lg text-amber-400 shrink-0">
+                  <Activity className="w-4 h-4" />
+                </div>
+                <p className="text-xs text-amber-400/90">
+                  <span className="font-medium">Viewing demo data</span> — live sync is currently unavailable.
+                </p>
+              </div>
+            )}
+
+            {error && !demoMode && (
               <div className="mb-4 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3">
                 <div className="p-2 bg-red-500/10 rounded-lg text-red-400 shrink-0">
                   <Activity className="w-5 h-5" />

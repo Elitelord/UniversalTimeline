@@ -109,6 +109,7 @@ export default function SummaryView({ date }: SummaryViewProps) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [demoMode, setDemoMode] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -124,6 +125,7 @@ export default function SummaryView({ date }: SummaryViewProps) {
           isComparing ? ranges.compareStart : undefined,
           isComparing ? ranges.compareEnd : undefined
         );
+        setDemoMode(!!(result as any).__demo);
         setData(result);
       } catch (err: any) {
         setError(err.message);
@@ -142,7 +144,7 @@ export default function SummaryView({ date }: SummaryViewProps) {
     );
   }
 
-  if (error) {
+  if (error && !demoMode) {
     return (
       <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3">
         <div className="p-2 bg-red-500/10 rounded-lg text-red-400 shrink-0">
@@ -196,6 +198,17 @@ export default function SummaryView({ date }: SummaryViewProps) {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+
+      {demoMode && (
+        <div className="px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-3">
+          <div className="p-1.5 bg-amber-500/10 rounded-lg text-amber-400 shrink-0">
+            <Activity className="w-4 h-4" />
+          </div>
+          <p className="text-xs text-amber-400/90">
+            <span className="font-medium">Viewing demo data</span> — live sync is currently unavailable.
+          </p>
+        </div>
+      )}
       
       {/* Controls Bar */}
       <div className="flex flex-wrap gap-4 items-center justify-between bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-3 backdrop-blur-xl">

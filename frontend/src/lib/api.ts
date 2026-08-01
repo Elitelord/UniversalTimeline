@@ -1,6 +1,15 @@
 import { Session } from '@supabase/supabase-js';
+import { generateDemoTimeline, generateDemoSummary } from './demo-data';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+// Sentinel error to signal the UI that we fell back to demo data
+export class DemoFallbackError extends Error {
+  constructor() {
+    super('DEMO_FALLBACK');
+    this.name = 'DemoFallbackError';
+  }
+}
 
 async function fetchWithGracefulError(url: string, options: RequestInit) {
   let res: Response;
@@ -54,14 +63,22 @@ export async function fetchTimeline(
     params.set('search', filters.search);
   }
 
-  return fetchWithGracefulError(
-    `${API_URL}/timeline?${params.toString()}`,
-    {
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    }
-  );
+  try {
+    return await fetchWithGracefulError(
+      `${API_URL}/timeline?${params.toString()}`,
+      {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      }
+    );
+  } catch {
+    // Backend unreachable — return demo data and signal the caller
+    const demoEvents = generateDemoTimeline(startDate);
+    // Attach a marker so the page component knows this is demo data
+    (demoEvents as any).__demo = true;
+    return demoEvents;
+  }
 }
 
 
@@ -82,10 +99,16 @@ export async function fetchSummary(
     params.set('compare_end_date', compareEndDate);
   }
 
-  return fetchWithGracefulError(`${API_URL}/summary?${params.toString()}`, {
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-    },
-  });
+  try {
+    return await fetchWithGracefulError(`${API_URL}/summary?${params.toString()}`, {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+  } catch {
+    // Backend unreachable — return demo summary
+    const demoSummary = generateDemoSummary(startDate);
+    (demoSummary as any).__demo = true;
+    return demoSummary;
+  }
 }
-

@@ -20,6 +20,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import ws from 'ws';
 
 @Injectable()
 export class SupabaseAuthGuard implements CanActivate {
@@ -30,9 +31,15 @@ export class SupabaseAuthGuard implements CanActivate {
     // Create a Supabase client using the project URL and anon key.
     // The anon key is safe to use server-side for token verification —
     // it only has the permissions of an unauthenticated user.
+    // The ws transport is required for Node.js < 22 which lacks native WebSocket.
     this.supabase = createClient(
       this.configService.get<string>('SUPABASE_URL', ''),
       this.configService.get<string>('SUPABASE_ANON_KEY', ''),
+      {
+        realtime: {
+          transport: ws as any,
+        },
+      },
     );
   }
 
