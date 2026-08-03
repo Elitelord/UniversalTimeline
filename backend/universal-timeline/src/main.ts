@@ -1,3 +1,7 @@
+import dns from 'node:dns';
+// Force IPv4 DNS resolution — Render's free tier cannot reach Supabase over IPv6
+dns.setDefaultResultOrder('ipv4first');
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';

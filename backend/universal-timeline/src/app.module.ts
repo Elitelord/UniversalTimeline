@@ -29,10 +29,6 @@ import { RequestLoggerMiddleware } from './common/middleware/request-logger.midd
         database: config.get<string>('POSTGRES_DB', 'universal_timeline'),
         autoLoadEntities: true,
         synchronize: true,
-        // Force IPv4 — Render's free tier cannot reach Supabase over IPv6
-        extra: {
-          family: 4,
-        },
         // Supabase requires SSL for external connections
         ssl: config.get<string>('DB_HOST', 'localhost') !== 'localhost'
           ? { rejectUnauthorized: false }
