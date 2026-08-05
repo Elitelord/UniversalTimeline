@@ -4,6 +4,10 @@ A cross-platform activity tracking system that aggregates digital activity from 
 
 > **[Live Demo](https://universal-timeline-bb6v.vercel.app/)** · Viewing demo data when the backend is asleep — sign in to explore the full UI.
 
+## Download Latest Release (v0.0.0)
+- 🪟 [Windows x64 Client](https://github.com/Elitelord/UniversalTimeline/releases/download/v0.0.0/UniversalTimeline-Windows-x64.exe)
+- 📱 [Android Client (APK)](https://github.com/Elitelord/UniversalTimeline/releases/download/v0.0.0/UniversalTimeline-Android.apk)
+
 ---
 
 ## Architecture
