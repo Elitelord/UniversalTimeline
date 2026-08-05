@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup .NET 9
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+    - name: Publish Windows Client
+      run: dotnet publish -r win-x64 -c Release /p:PublishSingleFile=true /p:PublishReadyToRun=true --self-contained true
+      working-directory: ./client/windows/UniversalTimeline.Client
+    - name: Upload Windows artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-exe
+        path: client/windows/UniversalTimeline.Client/bin/Release/net9.0-windows/win-x64/publish/UniversalTimeline.Client.exe
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+    - name: Create local.properties
+      run: |
+        echo "supabase.url=${{ secrets.SUPABASE_URL }}" > local.properties
+        echo "supabase.anon_key=${{ secrets.SUPABASE_ANON_KEY }}" >> local.properties
+      working-directory: ./clients/android
+    - name: Build Release APK
+      run: chmod +x gradlew && ./gradlew assembleRelease
+      working-directory: ./clients/android
+    - name: Upload Android artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-apk
+        path: clients/android/app/build/outputs/apk/release/app-release-unsigned.apk
+
+  create-release:
+    needs: [build-windows, build-android]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Download Windows artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: windows-exe
+        path: ./release-assets
+    - name: Download Android artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: android-apk
+        path: ./release-assets
+    - name: Rename artifacts
+      run: |
+        mv ./release-assets/UniversalTimeline.Client.exe ./release-assets/UniversalTimeline-Windows-x64.exe
+        mv ./release-assets/app-release-unsigned.apk ./release-assets/UniversalTimeline-Android.apk
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        generate_release_notes: true
+        files: |
+          release-assets/UniversalTimeline-Windows-x64.exe
+          release-assets/UniversalTimeline-Android.apk
