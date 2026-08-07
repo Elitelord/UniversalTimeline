@@ -1,13 +1,26 @@
 using System.Net.Http.Json;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Linq;
 
 namespace UniversalTimeline.Client;
 
 public class SupabaseAuth
 {
-    private static readonly string SupabaseUrl = Environment.GetEnvironmentVariable("SUPABASE_URL") ?? "";
-    private static readonly string SupabaseAnonKey = Environment.GetEnvironmentVariable("SUPABASE_ANON_KEY") ?? "";
+    private static readonly string SupabaseUrl = GetConfigValue("SupabaseUrl", "SUPABASE_URL");
+    private static readonly string SupabaseAnonKey = GetConfigValue("SupabaseAnonKey", "SUPABASE_ANON_KEY");
+
+    private static string GetConfigValue(string metadataKey, string envKey)
+    {
+        var attributes = Assembly.GetExecutingAssembly().GetCustomAttributes<AssemblyMetadataAttribute>();
+        var metadataValue = attributes.FirstOrDefault(a => a.Key == metadataKey)?.Value;
+        if (!string.IsNullOrEmpty(metadataValue))
+        {
+            return metadataValue;
+        }
+        return Environment.GetEnvironmentVariable(envKey) ?? "";
+    }
 
     private readonly HttpClient _authClient;
     private readonly string _sessionFilePath;

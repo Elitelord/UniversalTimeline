@@ -13,4 +13,9 @@
     <PackageReference Include="System.Text.Json" Version="10.0.9" />
   </ItemGroup>
 
+  <ItemGroup>
+    <AssemblyMetadata Include="SupabaseUrl" Value="$(SupabaseUrl)" Condition="'$(SupabaseUrl)' != ''" />
+    <AssemblyMetadata Include="SupabaseAnonKey" Value="$(SupabaseAnonKey)" Condition="'$(SupabaseAnonKey)' != ''" />
+  </ItemGroup>
+
 </Project>

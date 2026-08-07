@@ -18,7 +18,7 @@ jobs:
       with:
         dotnet-version: '9.0.x'
     - name: Publish Windows Client
-      run: dotnet publish -r win-x64 -c Release /p:PublishSingleFile=true /p:PublishReadyToRun=true --self-contained true
+      run: dotnet publish -r win-x64 -c Release /p:PublishSingleFile=true /p:PublishReadyToRun=true --self-contained true -p:SupabaseUrl="${{ secrets.SUPABASE_URL }}" -p:SupabaseAnonKey="${{ secrets.SUPABASE_ANON_KEY }}"
       working-directory: ./client/windows/UniversalTimeline.Client
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
