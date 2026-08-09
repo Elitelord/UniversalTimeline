@@ -1,3 +1,5 @@
+using Velopack;
+
 namespace UniversalTimeline.Client;
 
 static class Program
@@ -5,6 +7,7 @@ static class Program
     [STAThread]
     static void Main()
     {
+        VelopackApp.Build().Run();
         // Ensure only one instance runs at a time
         using var mutex = new Mutex(true, "UniversalTimeline.Client.SingleInstance", out bool createdNew);
         if (!createdNew)

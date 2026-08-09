@@ -15,6 +15,7 @@ public class SyncQueue : IDisposable
 
     private readonly HttpClient _httpClient;
     private readonly System.Threading.Timer _syncTimer;
+    private readonly System.Threading.Timer _saveTimer;
     private readonly string _queueFilePath;
     private readonly object _lock = new();
 
@@ -44,6 +45,10 @@ public class SyncQueue : IDisposable
         // Sync every 60 seconds
         _syncTimer = new System.Threading.Timer(SyncCallback, null,
             TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(SyncIntervalSeconds));
+
+        // Save queue to disk every 5 minutes (to avoid high I/O on every tab switch when offline)
+        _saveTimer = new System.Threading.Timer(_ => SaveToDisk(), null, 
+            TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
     }
 
     public int PendingCount
@@ -67,7 +72,6 @@ public class SyncQueue : IDisposable
         lock (_lock)
         {
             _queue.Add(evt);
-            SaveToDisk();
         }
     }
 
@@ -129,14 +133,17 @@ public class SyncQueue : IDisposable
 
     private void SaveToDisk()
     {
-        try
+        lock (_lock)
         {
-            var json = JsonSerializer.Serialize(_queue, new JsonSerializerOptions { WriteIndented = false });
-            File.WriteAllText(_queueFilePath, json);
-        }
-        catch
-        {
-            // Best-effort persistence
+            try
+            {
+                var json = JsonSerializer.Serialize(_queue, new JsonSerializerOptions { WriteIndented = false });
+                File.WriteAllText(_queueFilePath, json);
+            }
+            catch
+            {
+                // Best-effort persistence
+            }
         }
     }
 
@@ -163,6 +170,7 @@ public class SyncQueue : IDisposable
     public void Dispose()
     {
         _syncTimer.Dispose();
-        lock (_lock) SaveToDisk();
+        _saveTimer.Dispose();
+        SaveToDisk();
     }
 }

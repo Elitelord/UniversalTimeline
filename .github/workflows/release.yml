@@ -18,13 +18,19 @@ jobs:
       with:
         dotnet-version: '9.0.x'
     - name: Publish Windows Client
-      run: dotnet publish -r win-x64 -c Release /p:PublishSingleFile=true /p:PublishReadyToRun=true --self-contained true -p:SupabaseUrl="${{ secrets.SUPABASE_URL }}" -p:SupabaseAnonKey="${{ secrets.SUPABASE_ANON_KEY }}"
+      run: dotnet publish -c Release -o publish -p:SupabaseUrl="${{ secrets.SUPABASE_URL }}" -p:SupabaseAnonKey="${{ secrets.SUPABASE_ANON_KEY }}"
       working-directory: ./client/windows/UniversalTimeline.Client
-    - name: Upload Windows artifact
+    - name: Install Velopack CLI
+      run: dotnet tool install -g vpk
+    - name: Build Velopack Installer
+      run: |
+        $ver = "${{ github.ref_name }}".TrimStart('v')
+        vpk pack -u UniversalTimeline -v $ver -p client/windows/UniversalTimeline.Client/publish -e UniversalTimeline.Client.exe -o Releases
+    - name: Upload Windows artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: windows-exe
-        path: client/windows/UniversalTimeline.Client/bin/Release/net9.0-windows/win-x64/publish/UniversalTimeline.Client.exe
+        name: windows-release
+        path: Releases/
 
   build-android:
     runs-on: ubuntu-latest
@@ -56,24 +62,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Download Windows artifact
+    - name: Download Windows artifacts
       uses: actions/download-artifact@v4
       with:
-        name: windows-exe
+        name: windows-release
         path: ./release-assets
     - name: Download Android artifact
       uses: actions/download-artifact@v4
       with:
         name: android-apk
         path: ./release-assets
-    - name: Rename artifacts
-      run: |
-        mv ./release-assets/UniversalTimeline.Client.exe ./release-assets/UniversalTimeline-Windows-x64.exe
-        mv ./release-assets/app-release-unsigned.apk ./release-assets/UniversalTimeline-Android.apk
+    - name: Rename Android artifact
+      run: mv ./release-assets/app-release-unsigned.apk ./release-assets/UniversalTimeline-Android.apk
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         generate_release_notes: true
         files: |
-          release-assets/UniversalTimeline-Windows-x64.exe
-          release-assets/UniversalTimeline-Android.apk
+          release-assets/*

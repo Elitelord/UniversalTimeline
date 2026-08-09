@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -39,8 +39,20 @@ internal static partial class Win32
         return sb.ToString();
     }
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, uint processId);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseHandle(IntPtr hObject);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool QueryFullProcessImageName(IntPtr hProcess, uint dwFlags, StringBuilder lpExeName, ref uint lpdwSize);
+
+    private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+
     /// <summary>
-    /// Gets the process name (e.g. "chrome", "Code") for the given window handle.
+    /// Gets the process name (e.g. "chrome", "Code") for the given window handle natively.
     /// Returns null if the process cannot be accessed.
     /// </summary>
     public static string? GetProcessName(IntPtr hWnd)
@@ -48,15 +60,23 @@ internal static partial class Win32
         GetWindowThreadProcessId(hWnd, out uint pid);
         if (pid == 0) return null;
 
+        IntPtr hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if (hProcess == IntPtr.Zero) return null;
+
         try
         {
-            using var process = Process.GetProcessById((int)pid);
-            return process.ProcessName;
-        }
-        catch
-        {
-            // Process may have exited between the call and lookup
+            uint capacity = 1024;
+            var sb = new StringBuilder((int)capacity);
+            if (QueryFullProcessImageName(hProcess, 0, sb, ref capacity))
+            {
+                var fullPath = sb.ToString();
+                return Path.GetFileNameWithoutExtension(fullPath);
+            }
             return null;
+        }
+        finally
+        {
+            CloseHandle(hProcess);
         }
     }
 

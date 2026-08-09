@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Velopack;
 
 namespace UniversalTimeline.Client;
 
@@ -20,6 +21,7 @@ public class TrayApplicationContext : ApplicationContext
     private readonly ToolStripMenuItem _statusItem;
     private readonly ToolStripMenuItem _authItem;
     private readonly System.Threading.Timer _refreshTimer;
+    private readonly System.Threading.Timer _updateTimer;
 
     public TrayApplicationContext()
     {
@@ -106,6 +108,9 @@ public class TrayApplicationContext : ApplicationContext
             }
         }, null, TimeSpan.FromMinutes(45), TimeSpan.FromMinutes(45));
 
+        // Setup auto-update timer (every 4 hours)
+        _updateTimer = new System.Threading.Timer(async _ => await CheckForUpdatesAsync(), null, TimeSpan.FromMinutes(1), TimeSpan.FromHours(4));
+
         // Start lifecycle initialization
         InitializeLifecycle();
     }
@@ -129,6 +134,32 @@ public class TrayApplicationContext : ApplicationContext
             // First time or logged out, prompt for login
             PromptLogin();
         }
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        try
+        {
+            var mgr = new UpdateManager("https://github.com/Elitelord/UniversalTimeline");
+            if (!mgr.IsInstalled) return;
+
+            var newVersion = await mgr.CheckForUpdatesAsync();
+            if (newVersion != null)
+            {
+                await mgr.DownloadUpdatesAsync(newVersion);
+                
+                _trayIcon.ShowBalloonTip(5000, "Update Available", $"Version {newVersion.TargetFullRelease.Version} is ready. Click here to restart.", ToolTipIcon.Info);
+                
+                _trayIcon.BalloonTipClicked += (s, e) => mgr.ApplyUpdatesAndRestart(newVersion);
+                
+                // Add a context menu item for restart
+                _statusItem.Text = $"Restart to update to {newVersion.TargetFullRelease.Version}";
+                _statusItem.Enabled = true;
+                _statusItem.ForeColor = Color.DodgerBlue;
+                _statusItem.Click += (s, e) => mgr.ApplyUpdatesAndRestart(newVersion);
+            }
+        }
+        catch { /* best effort background check */ }
     }
 
     private void PromptLogin()
@@ -241,6 +272,7 @@ public class TrayApplicationContext : ApplicationContext
         _tracker.Dispose();
         _syncQueue.Dispose();
         _refreshTimer.Dispose();
+        _updateTimer.Dispose();
         _httpClient.Dispose();
         Application.Exit();
     }
@@ -254,6 +286,7 @@ public class TrayApplicationContext : ApplicationContext
             _tracker.Dispose();
             _syncQueue.Dispose();
             _refreshTimer.Dispose();
+            _updateTimer?.Dispose();
             _httpClient.Dispose();
         }
         base.Dispose(disposing);
