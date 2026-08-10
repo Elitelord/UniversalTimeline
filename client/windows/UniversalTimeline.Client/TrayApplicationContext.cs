@@ -1,4 +1,6 @@
+using System.Linq;
 using System.Net.Http.Json;
+using System.Reflection;
 using System.Text.Json;
 using Velopack;
 
@@ -25,9 +27,15 @@ public class TrayApplicationContext : ApplicationContext
 
     public TrayApplicationContext()
     {
+        var backendUrl = GetConfigValue("BackendApiUrl", "BACKEND_API_URL");
+        if (string.IsNullOrEmpty(backendUrl))
+        {
+            backendUrl = "http://localhost:3001"; // Fallback for local debugging
+        }
+
         _httpClient = new HttpClient
         {
-            BaseAddress = new Uri("http://localhost:3001"),
+            BaseAddress = new Uri(backendUrl),
             Timeout = TimeSpan.FromSeconds(15)
         };
 
@@ -113,6 +121,20 @@ public class TrayApplicationContext : ApplicationContext
 
         // Start lifecycle initialization
         InitializeLifecycle();
+    }
+
+    private static string GetConfigValue(string key, string envVar)
+    {
+        var attribute = Assembly.GetExecutingAssembly()
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(a => a.Key == key);
+
+        if (attribute != null && !string.IsNullOrEmpty(attribute.Value))
+        {
+            return attribute.Value;
+        }
+        
+        return Environment.GetEnvironmentVariable(envVar) ?? string.Empty;
     }
 
     private async void InitializeLifecycle()

@@ -17,6 +17,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.universaltimeline.sync.SupabaseAuth
 import com.example.universaltimeline.sync.SyncQueue
+import com.example.universaltimeline.sync.AutoUpdater
 import com.example.universaltimeline.tracking.TrackingUtils
 import kotlinx.coroutines.launch
 
@@ -44,6 +45,12 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
   // Server URL
   var serverUrl by remember { mutableStateOf(syncQueue.getServerUrl()) }
   var serverUrlSaved by remember { mutableStateOf(syncQueue.getServerUrl().isNotEmpty()) }
+
+  // Auto-updater
+  val updater = remember { AutoUpdater(context) }
+  var isCheckingUpdate by remember { mutableStateOf(false) }
+  var updateInfo by remember { mutableStateOf<AutoUpdater.UpdateInfo?>(null) }
+  var updateStatus by remember { mutableStateOf("") }
 
   // Re-check permissions when screen gains focus
   val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
@@ -295,6 +302,80 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             ) {
               Text("Grant")
             }
+          }
+        }
+      }
+    }
+
+    Spacer(modifier = Modifier.height(24.dp))
+    HorizontalDivider()
+    Spacer(modifier = Modifier.height(24.dp))
+
+    // ========== UPDATE SECTION ==========
+    Text(
+      text = "App Updates",
+      style = MaterialTheme.typography.titleMedium,
+      fontWeight = FontWeight.SemiBold,
+      modifier = Modifier.align(Alignment.Start)
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+
+    Card(
+      modifier = Modifier.fillMaxWidth(),
+      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+    ) {
+      Column(modifier = Modifier.padding(16.dp)) {
+        if (updateInfo != null) {
+          Text(
+            text = "Version ${updateInfo!!.versionName} available!",
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+          )
+          Spacer(modifier = Modifier.height(8.dp))
+          Button(
+            onClick = {
+              updater.downloadAndInstall(updateInfo!!)
+              updateStatus = "Downloading update..."
+            },
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Text("Download & Install")
+          }
+        } else {
+          if (updateStatus.isNotEmpty()) {
+            Text(
+              text = updateStatus,
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+          }
+          Button(
+            onClick = {
+              isCheckingUpdate = true
+              updateStatus = ""
+              scope.launch {
+                val result = updater.checkForUpdate(force = true)
+                isCheckingUpdate = false
+                if (result != null) {
+                  updateInfo = result
+                } else {
+                  updateStatus = "You're on the latest version."
+                }
+              }
+            },
+            enabled = !isCheckingUpdate,
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            if (isCheckingUpdate) {
+              CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onPrimary
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+            }
+            Text(if (isCheckingUpdate) "Checking..." else "Check for Updates")
           }
         }
       }

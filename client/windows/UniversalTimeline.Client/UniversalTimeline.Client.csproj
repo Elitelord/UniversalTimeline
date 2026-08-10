@@ -17,6 +17,7 @@
   <ItemGroup>
     <AssemblyMetadata Include="SupabaseUrl" Value="$(SupabaseUrl)" Condition="'$(SupabaseUrl)' != ''" />
     <AssemblyMetadata Include="SupabaseAnonKey" Value="$(SupabaseAnonKey)" Condition="'$(SupabaseAnonKey)' != ''" />
+    <AssemblyMetadata Include="BackendApiUrl" Value="$(BackendApiUrl)" Condition="'$(BackendApiUrl)' != ''" />
   </ItemGroup>
 
 </Project>

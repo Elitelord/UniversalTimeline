@@ -18,7 +18,7 @@ jobs:
       with:
         dotnet-version: '9.0.x'
     - name: Publish Windows Client
-      run: dotnet publish -c Release -o publish -p:SupabaseUrl="${{ secrets.SUPABASE_URL }}" -p:SupabaseAnonKey="${{ secrets.SUPABASE_ANON_KEY }}"
+      run: dotnet publish -c Release -o publish -p:SupabaseUrl="${{ secrets.SUPABASE_URL }}" -p:SupabaseAnonKey="${{ secrets.SUPABASE_ANON_KEY }}" -p:BackendApiUrl="${{ secrets.BACKEND_API_URL }}"
       working-directory: ./client/windows/UniversalTimeline.Client
     - name: Install Velopack CLI
       run: dotnet tool install -g vpk
