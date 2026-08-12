@@ -29,10 +29,28 @@ android {
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
     }
 
+    signingConfigs {
+        create("release") {
+            val keystorePath = System.getenv("KEYSTORE_FILE")
+                ?: localProperties.getProperty("keystore.file")
+                ?: ""
+            if (keystorePath.isNotEmpty()) {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                    ?: localProperties.getProperty("keystore.password") ?: ""
+                keyAlias = System.getenv("KEY_ALIAS")
+                    ?: localProperties.getProperty("key.alias") ?: ""
+                keyPassword = System.getenv("KEY_PASSWORD")
+                    ?: localProperties.getProperty("key.password") ?: ""
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

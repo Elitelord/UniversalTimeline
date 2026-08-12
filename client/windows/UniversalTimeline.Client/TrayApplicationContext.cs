@@ -94,6 +94,19 @@ public class TrayApplicationContext : ApplicationContext
 
         contextMenu.Items.Add(new ToolStripSeparator());
 
+        var updateItem = new ToolStripMenuItem("Check for Updates");
+        updateItem.Click += async (s, e) =>
+        {
+            updateItem.Enabled = false;
+            updateItem.Text = "Checking...";
+            await CheckForUpdatesAsync(manual: true);
+            updateItem.Text = "Check for Updates";
+            updateItem.Enabled = true;
+        };
+        contextMenu.Items.Add(updateItem);
+
+        contextMenu.Items.Add(new ToolStripSeparator());
+
         var exitItem = new ToolStripMenuItem("Exit");
         exitItem.Click += OnExit;
         contextMenu.Items.Add(exitItem);
@@ -158,12 +171,17 @@ public class TrayApplicationContext : ApplicationContext
         }
     }
 
-    private async Task CheckForUpdatesAsync()
+    private async Task CheckForUpdatesAsync(bool manual = false)
     {
         try
         {
             var mgr = new UpdateManager("https://github.com/Elitelord/UniversalTimeline");
-            if (!mgr.IsInstalled) return;
+            if (!mgr.IsInstalled)
+            {
+                if (manual)
+                    _trayIcon.ShowBalloonTip(3000, "Universal Timeline", "Updates are only available for installed versions.", ToolTipIcon.Info);
+                return;
+            }
 
             var newVersion = await mgr.CheckForUpdatesAsync();
             if (newVersion != null)
@@ -180,8 +198,16 @@ public class TrayApplicationContext : ApplicationContext
                 _statusItem.ForeColor = Color.DodgerBlue;
                 _statusItem.Click += (s, e) => mgr.ApplyUpdatesAndRestart(newVersion);
             }
+            else if (manual)
+            {
+                _trayIcon.ShowBalloonTip(3000, "Universal Timeline", "You're on the latest version.", ToolTipIcon.Info);
+            }
         }
-        catch { /* best effort background check */ }
+        catch
+        {
+            if (manual)
+                _trayIcon.ShowBalloonTip(3000, "Universal Timeline", "Could not check for updates. Please try again later.", ToolTipIcon.Warning);
+        }
     }
 
     private void PromptLogin()

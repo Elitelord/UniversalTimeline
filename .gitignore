@@ -219,3 +219,8 @@ _ReSharper*/
 *.opendb
 packages/
 *.csproj.user
+
+# Android signing
+*.jks
+*.keystore
+keystore_base64.txt
