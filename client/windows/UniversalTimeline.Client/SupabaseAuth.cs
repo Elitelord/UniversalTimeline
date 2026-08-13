@@ -31,7 +31,11 @@ public class SupabaseAuth
     public SupabaseAuth()
     {
         _authClient = new HttpClient();
-        _authClient.DefaultRequestHeaders.Add("apikey", SupabaseAnonKey);
+        if (!string.IsNullOrEmpty(SupabaseAnonKey))
+        {
+            _authClient.DefaultRequestHeaders.Add("apikey", SupabaseAnonKey);
+            _authClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", SupabaseAnonKey);
+        }
 
         var appData = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -45,31 +49,36 @@ public class SupabaseAuth
     public string? AccessToken => _currentSession?.AccessToken;
     public bool IsAuthenticated => !string.IsNullOrEmpty(AccessToken);
 
-    public async Task<bool> LoginAsync(string email, string password)
+    public async Task<(bool Success, string ErrorMessage)> LoginAsync(string email, string password)
     {
+        if (string.IsNullOrEmpty(SupabaseUrl) || string.IsNullOrEmpty(SupabaseAnonKey))
+        {
+            return (false, "Missing server configuration. Run build from CI.");
+        }
+
         try
         {
             var requestBody = new { email, password };
             var response = await _authClient.PostAsJsonAsync(
-                $"{SupabaseUrl}/auth/v1/token?grant_type=password", 
+                $"{SupabaseUrl.TrimEnd('/')}/auth/v1/token?grant_type=password", 
                 requestBody
             );
 
             if (!response.IsSuccessStatusCode)
-                return false;
+                return (false, "Invalid email or password.");
 
             var session = await response.Content.ReadFromJsonAsync<SessionData>();
             if (session == null || string.IsNullOrEmpty(session.AccessToken))
-                return false;
+                return (false, "Invalid response from server.");
 
             _currentSession = session;
             SaveSession();
             OnTokenChanged?.Invoke(session.AccessToken);
-            return true;
+            return (true, "");
         }
-        catch
+        catch (Exception ex)
         {
-            return false;
+            return (false, "Network error. Check connection.");
         }
     }
 

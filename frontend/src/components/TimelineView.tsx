@@ -130,17 +130,17 @@ export default function TimelineView({ events, date }: TimelineViewProps) {
 
   // Calculate positions and resolve visual overlaps
   const positionedEvents = useMemo(() => {
-    const dayStart = new Date(date + 'T00:00:00.000Z');
+    const dayStart = new Date(date + 'T00:00:00'); // Local midnight
 
     const basicEvents = events
       .filter((e) => {
-        if (!e.end_time) return false;
+        if (!e.end_time) return true; // Show currently running events
         const diffMs = new Date(e.end_time).getTime() - new Date(e.start_time).getTime();
         return diffMs >= 60000; // Filter out events less than 1 minute
       })
       .map((event) => {
         const start = new Date(event.start_time);
-        const end = new Date(event.end_time!);
+        const end = event.end_time ? new Date(event.end_time) : new Date();
         const startHour = (start.getTime() - dayStart.getTime()) / 3600000;
         const endHour = (end.getTime() - dayStart.getTime()) / 3600000;
         const top = Math.max(0, startHour) * hourHeight;
@@ -220,7 +220,7 @@ export default function TimelineView({ events, date }: TimelineViewProps) {
           {HOURS.map((hour) => (
             <div
               key={hour}
-              className="text-right text-xs text-zinc-500 font-mono"
+              className={`text-right text-xs font-mono ${hour === 0 ? 'text-zinc-300 font-bold' : 'text-zinc-500'}`}
               style={{ height: hourHeight }}
             >
               {hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour - 12} PM`}
@@ -234,7 +234,7 @@ export default function TimelineView({ events, date }: TimelineViewProps) {
           {HOURS.map((hour) => (
             <div key={hour}>
               <div
-                className="absolute left-0 right-0 border-t border-dashed border-zinc-800/60"
+                className={`absolute left-0 right-0 border-t ${hour === 0 ? 'border-solid border-zinc-500 border-t-2 z-10' : 'border-dashed border-zinc-800/60'}`}
                 style={{ top: hour * hourHeight }}
               />
               {zoomLevel >= 1.5 && [15, 30, 45].map(min => (

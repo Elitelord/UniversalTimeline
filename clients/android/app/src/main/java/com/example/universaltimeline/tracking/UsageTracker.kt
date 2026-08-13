@@ -23,6 +23,28 @@ class UsageTracker(private val context: Context) {
   private val appNameResolver = AppNameResolver(context)
   private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+  /** System packages that should not be tracked as user activity */
+  private val excludedPackages = setOf(
+    "com.android.systemui",
+    "com.android.launcher",
+    "com.android.launcher3",
+    "com.google.android.apps.nexuslauncher",
+    "com.sec.android.app.launcher",       // Samsung launcher
+    "com.android.settings",
+    "com.android.inputmethod.latin",
+    "com.google.android.inputmethod.latin",
+    "com.samsung.android.honeyboard",     // Samsung keyboard
+    "com.android.providers.media",
+    "com.android.providers.downloads",
+    "com.android.permissioncontroller",
+    "com.android.packageinstaller",
+    "com.google.android.permissioncontroller",
+    "com.google.android.packageinstaller",
+    "com.android.shell",
+    "android",
+    context.packageName                    // Our own app
+  )
+
   /**
    * Collects app usage events since the last successful query.
    * On first run, looks back 15 minutes.
@@ -51,7 +73,9 @@ class UsageTracker(private val context: Context) {
 
       when (event.eventType) {
         UsageEvents.Event.ACTIVITY_RESUMED -> {
-          resumedAt[event.packageName] = event.timeStamp
+          if (event.packageName !in excludedPackages) {
+            resumedAt[event.packageName] = event.timeStamp
+          }
         }
         UsageEvents.Event.ACTIVITY_PAUSED -> {
           val startTime = resumedAt.remove(event.packageName)
@@ -74,7 +98,7 @@ class UsageTracker(private val context: Context) {
     // For apps that are still in the foreground (resumed but not yet paused),
     // create an event ending at "now" — they'll get a proper end time next cycle.
     for ((packageName, startTime) in resumedAt) {
-      if (now > startTime) {
+      if (now > startTime && packageName !in excludedPackages) {
         val appName = appNameResolver.resolve(packageName)
         events.add(
           ActivityEvent(

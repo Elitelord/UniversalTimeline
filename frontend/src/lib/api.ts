@@ -48,8 +48,11 @@ export async function fetchTimeline(
   endDate: string,
   filters?: { activityTypes?: string[]; search?: string }
 ) {
-  const startISO = `${startDate}T00:00:00.000Z`;
-  const endISO = `${endDate}T23:59:59.999Z`;
+  const startDateLocal = new Date(`${startDate}T00:00:00`);
+  const startISO = startDateLocal.toISOString();
+  
+  const endDateLocal = new Date(`${endDate}T23:59:59.999`);
+  const endISO = endDateLocal.toISOString();
 
   const params = new URLSearchParams({
     start_date: startISO,

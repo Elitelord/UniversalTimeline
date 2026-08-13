@@ -122,7 +122,7 @@ class SyncQueue(private val context: Context) {
           put("id", UUID.randomUUID().toString())
           put("device_id", deviceId)
           put("activity_type", event.activityType)
-          put("activity_name", event.activityName)
+          put("activity_name", event.activityName.take(255))
           put("start_time", isoFormat.format(Date(event.startTime)))
           put("end_time", isoFormat.format(Date(event.endTime)))
           if (event.metadata.isNotEmpty()) {

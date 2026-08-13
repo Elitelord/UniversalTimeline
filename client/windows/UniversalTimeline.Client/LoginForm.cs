@@ -206,7 +206,7 @@ public class LoginForm : Form
         _loginButton.Text = "Signing In...";
         _errorLabel.Text = "";
 
-        bool success = await _auth.LoginAsync(email, password);
+        var (success, error) = await _auth.LoginAsync(email, password);
 
         if (success)
         {
@@ -215,7 +215,7 @@ public class LoginForm : Form
         }
         else
         {
-            _errorLabel.Text = "Invalid email or password.";
+            _errorLabel.Text = error;
             _loginButton.Enabled = true;
             _loginButton.Text = "Sign In";
         }
