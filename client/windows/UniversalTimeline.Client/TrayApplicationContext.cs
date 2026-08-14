@@ -190,6 +190,11 @@ public class TrayApplicationContext : ApplicationContext
                 
                 _trayIcon.ShowBalloonTip(5000, "Update Available", $"Version {newVersion.TargetFullRelease.Version} is ready. Click here to restart.", ToolTipIcon.Info);
                 
+                if (manual)
+                {
+                    MessageBox.Show($"Version {newVersion.TargetFullRelease.Version} is ready to install.\n\nYou can click the 'Restart to update' menu item in the system tray to apply it.", "Update Available", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+
                 _trayIcon.BalloonTipClicked += (s, e) => mgr.ApplyUpdatesAndRestart(newVersion);
                 
                 // Add a context menu item for restart
@@ -200,13 +205,15 @@ public class TrayApplicationContext : ApplicationContext
             }
             else if (manual)
             {
-                _trayIcon.ShowBalloonTip(3000, "Universal Timeline", "You're on the latest version.", ToolTipIcon.Info);
+                MessageBox.Show("You are already running the latest version of Universal Timeline.", "Up to date", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
-        catch
+        catch (Exception ex)
         {
             if (manual)
-                _trayIcon.ShowBalloonTip(3000, "Universal Timeline", "Could not check for updates. Please try again later.", ToolTipIcon.Warning);
+            {
+                MessageBox.Show($"Could not check for updates. Please try again later.\n\nError: {ex.Message}", "Update Check Failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
     }
 
