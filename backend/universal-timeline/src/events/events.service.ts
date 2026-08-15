@@ -38,30 +38,25 @@ export class EventsService {
       
       const nonExistingEvents = newEventList.filter(event => !existingEvents.some(existingEvent => existingEvent.idempotency_hash === event.idempotency_hash));
       
+      const uniqueUserIds = [...new Set(nonExistingEvents.map(e => e.user_id))];
+      const uniqueDeviceIds = [...new Set(nonExistingEvents.map(e => e.device_id))];
       
-      const mergedEvents = this.mergeService.mergeEvents(nonExistingEvents);
-      return this.eventRepository.save(mergedEvents);
-    }
-    const { metadata, ...rest } = createEventDto;
-    const newEvent = this.eventRepository.create(rest);
-    newEvent.start_time = new Date(createEventDto.start_time);
-    newEvent.end_time = createEventDto.end_time ? new Date(createEventDto.end_time) : null;
-    if (metadata) {
-      newEvent.metadata = metadata;
-    }
-    const newEventList = [newEvent];
-    
-    newEvent.idempotency_hash = createHash('sha256').update(newEvent.device_id + newEvent.activity_name + newEvent.start_time.toISOString()).digest('hex');
-    
-    const existingEvents = await this.eventRepository.find({
-        where: {
-          idempotency_hash: In(newEventList.map(event => event.idempotency_hash)),
-        },
-    });
+      let recentDbEvents: Event[] = [];
+      if (uniqueUserIds.length > 0 && uniqueDeviceIds.length > 0) {
+        recentDbEvents = await this.eventRepository.find({
+          where: { user_id: In(uniqueUserIds), device_id: In(uniqueDeviceIds) },
+          order: { start_time: 'DESC' },
+          take: 100
+        });
+      }
       
-    const nonExistingEvents = newEventList.filter(event => !existingEvents.some(existingEvent => existingEvent.idempotency_hash === event.idempotency_hash));
-    const mergedEvents = this.mergeService.mergeEvents(nonExistingEvents);
-    return this.eventRepository.save(mergedEvents);
+      const mergedEvents = this.mergeService.mergeEvents([...recentDbEvents, ...nonExistingEvents]);
+      
+      const toSave = mergedEvents.filter(e => !e.id || (e as any)._isModified);
+      return this.eventRepository.save(toSave);
+    } else {
+      return this.create([createEventDto as CreateEventDto]);
+    }
   }
 
   findAll() {

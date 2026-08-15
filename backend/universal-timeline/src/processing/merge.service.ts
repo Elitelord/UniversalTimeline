@@ -17,7 +17,7 @@ export class MergeService {
         const activeEvents = new Map<string, Event & { end_time: Date }>();
         
         for (const event of eventsCopy) {
-            const signature = `${event.activity_type}::${event.activity_name}`;
+            const signature = `${event.user_id}::${event.device_id}::${event.activity_type}::${event.activity_name}`;
             const lastActive = activeEvents.get(signature);
             
             if (lastActive) {
@@ -27,12 +27,14 @@ export class MergeService {
                 if (diff <= 60000) {
                     if (event.end_time.getTime() > lastActive.end_time.getTime()) {
                         lastActive.end_time = event.end_time;
+                        (lastActive as any)._isModified = true;
                     }
                     if (event.metadata) {
                         lastActive.metadata = {
                             ...(lastActive.metadata ?? {}),
                             ...(event.metadata ?? {}),
                         };
+                        (lastActive as any)._isModified = true;
                     }
                     continue; // Successfully merged, move to next event
                 } else {

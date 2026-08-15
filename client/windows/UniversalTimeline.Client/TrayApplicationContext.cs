@@ -175,7 +175,7 @@ public class TrayApplicationContext : ApplicationContext
     {
         try
         {
-            var mgr = new UpdateManager("https://github.com/Elitelord/UniversalTimeline");
+            var mgr = new UpdateManager(new Velopack.Sources.GithubSource("https://github.com/Elitelord/UniversalTimeline", null, false));
             if (!mgr.IsInstalled)
             {
                 if (manual)
