@@ -92,10 +92,10 @@ function getPeriodRanges(period: 'day' | 'week' | 'month', anchorDateStr: string
   }
 
   return {
-    start: currentStart.toISOString().split('T')[0],
-    end: currentEnd.toISOString().split('T')[0],
-    compareStart: compareStart.toISOString().split('T')[0],
-    compareEnd: compareEnd.toISOString().split('T')[0],
+    start: currentStart.toLocaleDateString('en-CA'),
+    end: currentEnd.toLocaleDateString('en-CA'),
+    compareStart: compareStart.toLocaleDateString('en-CA'),
+    compareEnd: compareEnd.toLocaleDateString('en-CA'),
   };
 }
 

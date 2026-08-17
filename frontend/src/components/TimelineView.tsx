@@ -94,7 +94,7 @@ export default function TimelineView({ events, date }: TimelineViewProps) {
   useEffect(() => {
     if (containerRef.current && events.length > 0) {
       const now = new Date();
-      const today = now.toISOString().split('T')[0];
+      const today = now.toLocaleDateString('en-CA');
       
       let targetHour = 9;
       if (date === today) {
@@ -417,7 +417,7 @@ function EventPopup({ event, onClose, colors }: { event: any, onClose: () => voi
 
 function CurrentTimeIndicator({ date, hourHeight }: { date: string, hourHeight: number }) {
   const now = new Date();
-  const today = now.toISOString().split('T')[0];
+  const today = now.toLocaleDateString('en-CA');
 
   if (date !== today) return null;
 

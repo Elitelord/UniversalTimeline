@@ -57,6 +57,7 @@ export async function fetchTimeline(
   const params = new URLSearchParams({
     start_date: startISO,
     end_date: endISO,
+    limit: '1000',
   });
 
   if (filters?.activityTypes && filters.activityTypes.length > 0) {

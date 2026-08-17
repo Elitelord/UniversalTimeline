@@ -85,17 +85,17 @@ export default function TimelinePage() {
   const goToPreviousDay = () => {
     const d = new Date(date + 'T12:00:00');
     d.setDate(d.getDate() - 1);
-    setDate(d.toISOString().split('T')[0]);
+    setDate(d.toLocaleDateString('en-CA'));
   };
 
   const goToNextDay = () => {
     const d = new Date(date + 'T12:00:00');
     d.setDate(d.getDate() + 1);
-    setDate(d.toISOString().split('T')[0]);
+    setDate(d.toLocaleDateString('en-CA'));
   };
 
   const goToToday = () => {
-    setDate(new Date().toISOString().split('T')[0]);
+    setDate(new Date().toLocaleDateString('en-CA'));
   };
 
   const formatDisplayDate = (dateStr: string) => {
@@ -108,7 +108,7 @@ export default function TimelinePage() {
     });
   };
 
-  const isToday = date === new Date().toISOString().split('T')[0];
+  const isToday = date === new Date().toLocaleDateString('en-CA');
   const hasActiveFilters = activeTypes.length > 0 || searchInput;
 
   const toggleType = (type: string) => {

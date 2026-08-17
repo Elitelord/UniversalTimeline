@@ -174,16 +174,41 @@ private fun fetchTodayUsageStats(context: Context): List<AppUsageItem> {
   val startTime = calendar.timeInMillis
   val endTime = System.currentTimeMillis()
 
-  val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, endTime)
-    ?: return emptyList()
+  val appUsageMap = mutableMapOf<String, Long>()
+  val activeApps = mutableMapOf<String, Long>()
+  
+  val events = usageStatsManager.queryEvents(startTime, endTime)
+  val event = android.app.usage.UsageEvents.Event()
+  
+  while (events.hasNextEvent()) {
+    events.getNextEvent(event)
+    val pkg = event.packageName
+    val time = event.timeStamp
+    
+    if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED) {
+      if (!activeApps.containsKey(pkg)) {
+        activeApps[pkg] = time
+      }
+    } else if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED || 
+               event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_STOPPED) {
+      if (activeApps.containsKey(pkg)) {
+        val start = activeApps.remove(pkg)!!
+        appUsageMap[pkg] = (appUsageMap[pkg] ?: 0L) + (time - start)
+      }
+    }
+  }
+  
+  val now = System.currentTimeMillis()
+  for ((pkg, start) in activeApps) {
+    appUsageMap[pkg] = (appUsageMap[pkg] ?: 0L) + (now - start)
+  }
 
-  return stats
-    .filter { it.totalTimeInForeground > 0 }
+  return appUsageMap.entries
     .map {
       AppUsageItem(
-        appName = appNameResolver.resolve(it.packageName),
-        packageName = it.packageName,
-        durationMs = it.totalTimeInForeground
+        appName = appNameResolver.resolve(it.key),
+        packageName = it.key,
+        durationMs = it.value
       )
     }
     // Filter out typical system packages to keep it clean

@@ -83,7 +83,7 @@ class UsageTracker(private val context: Context) {
             val appName = appNameResolver.resolve(event.packageName)
             events.add(
               ActivityEvent(
-                activityType = "application",
+                activityType = classifyActivity(appName, event.packageName),
                 activityName = appName,
                 startTime = startTime,
                 endTime = event.timeStamp,
@@ -102,7 +102,7 @@ class UsageTracker(private val context: Context) {
         val appName = appNameResolver.resolve(packageName)
         events.add(
           ActivityEvent(
-            activityType = "application",
+            activityType = classifyActivity(appName, packageName),
             activityName = appName,
             startTime = startTime,
             endTime = now,
@@ -117,5 +117,28 @@ class UsageTracker(private val context: Context) {
 
     Log.i(TAG, "Collected ${events.size} events since ${java.util.Date(lastQueryTime)}")
     return events
+  }
+
+  private fun classifyActivity(appName: String, packageName: String): String {
+    val lowerName = appName.lowercase()
+    val lowerPkg = packageName.lowercase()
+
+    if (lowerName in setOf("chrome", "firefox", "edge", "brave") || lowerPkg.contains("browser")) {
+      return "browsing"
+    }
+
+    if (lowerName in setOf("instagram", "whatsapp", "discord", "slack", "teams", "telegram", "signal", "snapchat", "messenger", "messages", "gmail", "outlook") || lowerPkg.contains("messaging")) {
+      return "communication"
+    }
+
+    if (lowerName in setOf("notion", "docs", "sheets", "drive", "calendar", "notes", "keep", "obsidian", "evernote")) {
+      return "productivity"
+    }
+
+    if (lowerName in setOf("youtube", "tiktok", "netflix", "spotify", "hulu", "twitch")) {
+      return "media"
+    }
+
+    return "application"
   }
 }

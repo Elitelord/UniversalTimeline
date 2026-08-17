@@ -63,7 +63,7 @@ export class EventsService {
     return this.eventRepository.find();
   }
 
-  getTimeline(user_id: string, start_date: string, end_date: string, page: number, limit: number, activity_type?: string, search?: string) {
+  async getTimeline(user_id: string, start_date: string, end_date: string, page: number, limit: number, activity_type?: string, search?: string) {
     const query = this.eventRepository
       .createQueryBuilder('event')
       .where('event.user_id = :user_id', { user_id })
@@ -83,11 +83,13 @@ export class EventsService {
       query.andWhere('event.activity_name ILIKE :search', { search: `%${search}%` });
     }
 
-    return query
+    const events = await query
       .orderBy('event.start_time', 'ASC')
       .skip(page * limit)
       .take(limit)
       .getMany();
+      
+    return this.mergeService.mergeEvents(events);
   }
   async getSummary(
     user_id: string,
