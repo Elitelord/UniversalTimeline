@@ -74,7 +74,7 @@ export default function LoginPage() {
         </div>
 
         {/* Form Card */}
-        <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-6 sm:p-8 backdrop-blur-xl">
+        <div className="bg-zinc-900/40 border border-zinc-800/80 rounded-xl p-6 sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <label htmlFor="email" className="block text-sm font-medium text-zinc-300">
@@ -89,7 +89,7 @@ export default function LoginPage() {
                 placeholder="you@example.com"
                 className="w-full px-3 py-2.5 bg-zinc-950/50 border border-zinc-800 rounded-lg text-sm text-zinc-100 placeholder-zinc-500 
                            focus:outline-none focus:ring-1 focus:ring-zinc-400 focus:border-zinc-500
-                           transition-all duration-200"
+                           transition-colors duration-150"
               />
             </div>
 
@@ -107,7 +107,7 @@ export default function LoginPage() {
                 placeholder="••••••••"
                 className="w-full px-3 py-2.5 bg-zinc-950/50 border border-zinc-800 rounded-lg text-sm text-zinc-100 placeholder-zinc-500 
                            focus:outline-none focus:ring-1 focus:ring-zinc-400 focus:border-zinc-500
-                           transition-all duration-200"
+                           transition-colors duration-150"
               />
             </div>
 
@@ -135,7 +135,7 @@ export default function LoginPage() {
               className="w-full py-2.5 px-4 mt-2 bg-zinc-100 hover:bg-white text-zinc-950 font-medium rounded-lg text-sm
                          focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 focus:ring-offset-zinc-950
                          disabled:opacity-70 disabled:cursor-not-allowed
-                         transition-colors duration-200 cursor-pointer shadow-sm"
+                         transition-colors duration-150 cursor-pointer shadow-sm"
             >
               {submitting ? (
                 <span className="flex items-center justify-center gap-2">
@@ -155,7 +155,7 @@ export default function LoginPage() {
                 setError(null);
                 setSuccess(null);
               }}
-              className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors cursor-pointer font-medium"
+              className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors duration-150 cursor-pointer font-medium"
             >
               {isSignUp
                 ? 'Already have an account? Sign in'
