@@ -201,7 +201,7 @@ public class ActivityTracker : IDisposable
         _pendingTitleCount = 0;
         _currentEvent = new ActivityEvent
         {
-            ActivityName = GetDisplayName(processName, windowTitle),
+            ActivityName = Sanitize(GetDisplayName(processName, windowTitle), processName),
             ActivityType = ClassifyActivity(processName),
             StartTime = DateTime.UtcNow,
             Metadata = new Dictionary<string, object>
@@ -321,6 +321,26 @@ public class ActivityTracker : IDisposable
             return "productivity";
 
         return "other";
+    }
+
+    private const int MaxActivityNameLength = 500;
+
+    /// <summary>
+    /// Ensures activity_name is neither empty nor absurdly long. An untitled window
+    /// falls back to the process name; verbose browser titles are capped. Mirrors the
+    /// server-side sanitizer — the backend also enforces this, but trimming here avoids
+    /// shipping oversized titles over the wire. (Android caps at 255 in SyncQueue.)
+    /// </summary>
+    private static string Sanitize(string displayName, string processName)
+    {
+        var name = (displayName ?? string.Empty).Trim();
+        if (name.Length == 0)
+        {
+            name = processName;
+        }
+        return name.Length > MaxActivityNameLength
+            ? name[..MaxActivityNameLength]
+            : name;
     }
 
     private static bool IsBrowser(string processNameLower) =>

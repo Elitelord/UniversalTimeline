@@ -174,6 +174,107 @@ export function groupEventsByHour(events: TimelineEvent[]): Map<number, Timeline
 }
 
 /**
+ * A run of contiguous events from the same app, shown as a single collapsible row.
+ *
+ * The Windows client now emits one event per browser tab / editor file, which is
+ * great for search but fragments the timeline (and, since each tab may be under the
+ * short-event threshold, would otherwise vanish). Grouping is a DISPLAY concern only —
+ * every underlying per-tab event is preserved in `events` and in storage.
+ */
+export interface ActivitySession {
+  id: string;
+  appName: string;
+  activityType: string;
+  events: TimelineEvent[];
+  start_time: string;
+  end_time: string | null;
+  /** Sum of the child events' durations (completed events only). */
+  activeMs: number;
+}
+
+const APP_DISPLAY_NAMES: Record<string, string> = {
+  chrome: 'Google Chrome',
+  msedge: 'Microsoft Edge',
+  firefox: 'Firefox',
+  brave: 'Brave',
+  opera: 'Opera',
+  vivaldi: 'Vivaldi',
+  arc: 'Arc',
+  cursor: 'Cursor',
+  code: 'VS Code',
+  'code - insiders': 'VS Code Insiders',
+  codium: 'VSCodium',
+  devenv: 'Visual Studio',
+  windsurf: 'Windsurf',
+  antigravity: 'Antigravity',
+  slack: 'Slack',
+  explorer: 'File Explorer',
+  windowsterminal: 'Windows Terminal',
+};
+
+/** The app a session belongs to — process (Windows) or package (Android), else the name. */
+function appIdentity(e: TimelineEvent): string {
+  const m = e.metadata || {};
+  const proc = (m.process_name ?? '').toString().toLowerCase().replace(/\.exe$/, '');
+  return proc || (m.package_name ?? '').toString().toLowerCase() || e.activity_name.toLowerCase();
+}
+
+/** Friendly app label for a session header (the individual tab titles live on the children). */
+function prettifyAppName(e: TimelineEvent): string {
+  const proc = ((e.metadata?.process_name as string) ?? '').toLowerCase().replace(/\.exe$/, '');
+  if (proc && APP_DISPLAY_NAMES[proc]) return APP_DISPLAY_NAMES[proc];
+  if (proc) return proc.charAt(0).toUpperCase() + proc.slice(1);
+  // Android events are already app-named; single non-browser events keep their name.
+  return e.activity_name;
+}
+
+/**
+ * Groups a chronological event list into per-app sessions. Consecutive events with
+ * the same app identity and activity type, separated by no more than `gapMs`, fold
+ * into one session. A session with a single event renders as an ordinary row; one
+ * with several renders as a collapsible "App · N items" row.
+ */
+export function groupIntoSessions(
+  events: TimelineEvent[],
+  gapMs: number = 5 * 60 * 1000
+): ActivitySession[] {
+  const sorted = [...events].sort(
+    (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+  );
+
+  const sessions: ActivitySession[] = [];
+  for (const e of sorted) {
+    const eStart = new Date(e.start_time).getTime();
+    const eEnd = e.end_time ? new Date(e.end_time).getTime() : eStart;
+    const last = sessions[sessions.length - 1];
+
+    if (last && last.end_time) {
+      const lastEnd = new Date(last.end_time).getTime();
+      const sameApp =
+        appIdentity(last.events[0]) === appIdentity(e) &&
+        last.activityType === e.activity_type;
+      if (sameApp && eStart - lastEnd <= gapMs) {
+        last.events.push(e);
+        last.end_time = e.end_time; // may be null (running) — ends the session open
+        last.activeMs += Math.max(0, eEnd - eStart);
+        continue;
+      }
+    }
+
+    sessions.push({
+      id: e.id,
+      appName: prettifyAppName(e),
+      activityType: e.activity_type,
+      events: [e],
+      start_time: e.start_time,
+      end_time: e.end_time,
+      activeMs: Math.max(0, eEnd - eStart),
+    });
+  }
+  return sessions;
+}
+
+/**
  * Groups events by their starting date (YYYY-MM-DD) in local time.
  */
 export function groupEventsByDay(events: TimelineEvent[]): Map<string, TimelineEvent[]> {

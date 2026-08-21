@@ -66,6 +66,20 @@ describe('EventsService', () => {
     expect(candidateQuery.take).toBeGreaterThan(100);
   });
 
+  it('defaults an empty activity_name from metadata rather than rejecting', async () => {
+    // Windows sends the raw window title; an untitled window yields "".
+    await service.create([
+      dto({ activity_name: '', metadata: { process_name: 'chrome' } }) as any,
+    ]);
+    expect(repo.save.mock.calls[0][0][0].activity_name).toBe('chrome');
+  });
+
+  it('caps an over-long activity_name (a verbose browser tab title)', async () => {
+    const longTitle = 'A'.repeat(1500);
+    await service.create([dto({ activity_name: longTitle }) as any]);
+    expect(repo.save.mock.calls[0][0][0].activity_name.length).toBe(1000);
+  });
+
   it('saves a lone new event that merges with nothing (regression: dbfc4dc)', async () => {
     // The old `!e.id || _isModified` filter dropped any new event that didn't merge,
     // because clients always supply an id. This is the exact case that regressed.

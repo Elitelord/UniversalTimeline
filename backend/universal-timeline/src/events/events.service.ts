@@ -29,6 +29,28 @@ const MERGE_CANDIDATE_CAP = 1000;
  */
 const SIGNAL_ACTIVITY_TYPES = ['notification', 'screen', 'idle'];
 
+/** Generous cap on activity_name — well beyond any real title, bounds index bloat. */
+const ACTIVITY_NAME_MAX = 1000;
+
+/**
+ * Coerces a client-supplied activity_name into something always storable.
+ * Empty/whitespace names fall back to a metadata hint (window/process/package),
+ * and over-long names are capped. Prevents one odd event from failing an entire
+ * batch, and keeps the column and its FTS/trigram indexes bounded.
+ */
+function sanitizeActivityName(
+  name: string | undefined,
+  metadata?: Record<string, any> | null,
+): string {
+  let n = (name ?? '').trim();
+  if (!n) {
+    n = String(
+      metadata?.window_title ?? metadata?.process_name ?? metadata?.package_name ?? '',
+    ).trim() || 'Unknown';
+  }
+  return n.length > ACTIVITY_NAME_MAX ? n.slice(0, ACTIVITY_NAME_MAX) : n;
+}
+
 @Injectable()
 export class EventsService {
   constructor(    
@@ -49,6 +71,7 @@ export class EventsService {
         if (metadata) {
           newEvent.metadata = metadata;
         }
+        newEvent.activity_name = sanitizeActivityName(rest.activity_name, metadata);
         newEventList.push(newEvent);
       }
       // Normalise the type before anything else looks at it: MergeService keys on

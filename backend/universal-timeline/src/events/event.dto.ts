@@ -28,10 +28,15 @@ export class CreateEventDto {
   @MaxLength(50)
   activity_type: string;
 
+  // Intentionally lenient: the Windows client sends the raw window title here, which
+  // can be empty (untitled window) or longer than 255 chars (a verbose browser tab
+  // title). The DB column is unbounded varchar, and ParseArrayPipe rejects the WHOLE
+  // batch if any one item fails validation — so a single long title used to strand
+  // every queued event behind repeated 400s. EventsService sanitizes the value
+  // (defaults empties, caps length) instead of rejecting it.
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  @MaxLength(255)
-  activity_name: string;
+  activity_name?: string;
 
   @IsDateString()
   @IsNotEmpty()

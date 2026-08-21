@@ -3,13 +3,15 @@
 import { useMemo, useState } from 'react';
 import { Monitor, Clock } from 'lucide-react';
 import EventPopup from '@/components/EventPopup';
-import EventRow from '@/components/EventRow';
+import SessionPopup from '@/components/SessionPopup';
+import EventRow, { SessionRow } from '@/components/EventRow';
 import {
   TimelineEvent,
-  filterShortEvents,
+  ActivitySession,
+  groupIntoSessions,
   formatDayHeader,
 } from '@/lib/timeline-utils';
-import { RADIUS } from '@/lib/design-tokens';
+import { RADIUS, MIN_EVENT_DURATION_MS } from '@/lib/design-tokens';
 
 interface LogViewProps {
   events: TimelineEvent[];
@@ -20,35 +22,33 @@ interface LogViewProps {
 interface HourGroup {
   hour: number;
   label: string;
-  events: TimelineEvent[];
+  sessions: ActivitySession[];
 }
 
 export default function LogView({ events, date, isFullscreen = false }: LogViewProps) {
   const [expandedEvent, setExpandedEvent] = useState<TimelineEvent | null>(null);
+  const [expandedSession, setExpandedSession] = useState<ActivitySession | null>(null);
 
-  // Filter and sort events chronologically (newest first or chronological)
-  const sortedEvents = useMemo(() => {
-    return filterShortEvents(events).sort(
-      (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+  // Group raw events into per-app sessions, then hide sessions too brief to matter.
+  // Filtering by the SESSION total (not per-event) is what stops brief browsing from
+  // vanishing now that each tab is its own event: four 20s tabs = an 80s session that
+  // shows, with the tabs available on expand.
+  const sessions = useMemo(() => {
+    return groupIntoSessions(events).filter(
+      (s) => s.end_time === null || s.activeMs >= MIN_EVENT_DURATION_MS
     );
   }, [events]);
 
-  // Group events by hour of the day
+  // Group sessions by the hour they start in
   const hourGroups = useMemo(() => {
     const groups: HourGroup[] = [];
-    const map = new Map<number, TimelineEvent[]>();
+    const map = new Map<number, ActivitySession[]>();
 
-    for (let h = 0; h < 24; h++) {
-      map.set(h, []);
-    }
+    for (let h = 0; h < 24; h++) map.set(h, []);
 
-    for (const event of sortedEvents) {
-      const start = new Date(event.start_time);
-      const hour = start.getHours();
-      const list = map.get(hour);
-      if (list) {
-        list.push(event);
-      }
+    for (const session of sessions) {
+      const hour = new Date(session.start_time).getHours();
+      map.get(hour)?.push(session);
     }
 
     for (let h = 0; h < 24; h++) {
@@ -56,25 +56,19 @@ export default function LogView({ events, date, isFullscreen = false }: LogViewP
       if (items.length > 0) {
         const period = h >= 12 ? 'PM' : 'AM';
         const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
-        groups.push({
-          hour: h,
-          label: `${displayHour}:00 ${period}`,
-          events: items,
-        });
+        groups.push({ hour: h, label: `${displayHour}:00 ${period}`, sessions: items });
       }
     }
 
     return groups;
-  }, [sortedEvents]);
+  }, [sessions]);
 
-  // Compute total duration of all visible events
+  // Total active time across visible sessions. Uses each session's completed-child
+  // duration; an in-progress session's live elapsed time is counted once it closes
+  // (avoids reading the clock during render).
   const totalDurationMinutes = useMemo(() => {
-    return sortedEvents.reduce((total, e) => {
-      const start = new Date(e.start_time).getTime();
-      const end = e.end_time ? new Date(e.end_time).getTime() : Date.now();
-      return total + Math.max(0, (end - start) / 60000);
-    }, 0);
-  }, [sortedEvents]);
+    return sessions.reduce((total, s) => total + s.activeMs / 60000, 0);
+  }, [sessions]);
 
   return (
     <>
@@ -90,7 +84,7 @@ export default function LogView({ events, date, isFullscreen = false }: LogViewP
             </span>
             <span className="text-zinc-600">·</span>
             <span className="text-xs font-mono text-zinc-400">
-              {sortedEvents.length} {sortedEvents.length === 1 ? 'event' : 'events'}
+              {sessions.length} {sessions.length === 1 ? 'session' : 'sessions'}
             </span>
           </div>
 
@@ -104,9 +98,9 @@ export default function LogView({ events, date, isFullscreen = false }: LogViewP
           )}
         </div>
 
-        {/* Scrollable Event Log List */}
+        {/* Scrollable Session Log List */}
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-          {sortedEvents.length === 0 ? (
+          {sessions.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full py-24 text-zinc-500">
               <Monitor className="w-10 h-10 mb-3 opacity-20" />
               <p className="text-sm font-medium text-zinc-400">No activity recorded for this day</p>
@@ -122,15 +116,28 @@ export default function LogView({ events, date, isFullscreen = false }: LogViewP
                       {group.label}
                     </span>
                     <span className="text-[10px] font-mono text-zinc-600">
-                      {group.events.length} {group.events.length === 1 ? 'event' : 'events'}
+                      {group.sessions.length} {group.sessions.length === 1 ? 'session' : 'sessions'}
                     </span>
                   </div>
 
-                  {/* Hour Event Rows (Hairline Separators) */}
+                  {/* A single-event session renders as an ordinary row; a multi-event
+                      one (e.g. a run of browser tabs) renders as a collapsed session. */}
                   <div className="divide-y divide-zinc-800/20">
-                    {group.events.map((event) => (
-                      <EventRow key={event.id} event={event} onSelect={setExpandedEvent} />
-                    ))}
+                    {group.sessions.map((session) =>
+                      session.events.length === 1 ? (
+                        <EventRow
+                          key={session.id}
+                          event={session.events[0]}
+                          onSelect={setExpandedEvent}
+                        />
+                      ) : (
+                        <SessionRow
+                          key={session.id}
+                          session={session}
+                          onSelect={setExpandedSession}
+                        />
+                      )
+                    )}
                   </div>
                 </div>
               ))}
@@ -138,6 +145,15 @@ export default function LogView({ events, date, isFullscreen = false }: LogViewP
           )}
         </div>
       </div>
+
+      {/* Session detail (sits below the event popup so drill-down stacks on top) */}
+      {expandedSession && (
+        <SessionPopup
+          session={expandedSession}
+          onSelectEvent={setExpandedEvent}
+          onClose={() => setExpandedSession(null)}
+        />
+      )}
 
       {/* Expanded Event Modal */}
       {expandedEvent && (
