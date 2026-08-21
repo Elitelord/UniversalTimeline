@@ -7,7 +7,7 @@ async function check() {
     ssl: { rejectUnauthorized: false }
   });
   await client.connect();
-  const res = await client.query('SELECT * FROM "event" ORDER BY start_time DESC LIMIT 10;');
+  const res = await client.query('SELECT * FROM "activity_events" ORDER BY start_time DESC LIMIT 10;');
   console.log(JSON.stringify(res.rows, null, 2));
   await client.end();
 }

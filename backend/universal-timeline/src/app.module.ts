@@ -5,6 +5,7 @@ import { EventsModule } from './events/events.module';
 import { TimelineModule } from './timeline/timeline.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SummaryModule } from './summary/summary.module';
+import { SearchModule } from './search/search.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 
@@ -14,6 +15,7 @@ import { RequestLoggerMiddleware } from './common/middleware/request-logger.midd
     EventsModule,
     TimelineModule,
     SummaryModule,
+    SearchModule,
     // TypeOrmModule.forRootAsync uses ConfigService to read env vars.
     // This guarantees .env is loaded before we try to read DB_HOST, etc.
     // (Previously we used process.env directly, which can be a race condition.)

@@ -22,10 +22,30 @@ import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import ws from 'ws';
 
+/**
+ * How long a verified token is trusted without re-asking Supabase.
+ *
+ * getUser() is a network round-trip to Supabase on every single request, which for
+ * search-as-you-type means 100-300ms prepended to each keystroke burst — usually more
+ * than the query itself costs. A short TTL removes that for all but the first request
+ * while keeping the window in which a revoked token still works down to a minute.
+ *
+ * The cache is per-process and evaporates when the instance restarts or sleeps, which
+ * is the right behaviour for a single free-tier web service. A future move to local
+ * JWKS verification would remove the round-trip entirely, but that is a
+ * correctness-sensitive change to the only auth boundary and belongs on its own.
+ */
+const TOKEN_CACHE_TTL_MS = 60_000;
+const TOKEN_CACHE_MAX_ENTRIES = 500;
+
 @Injectable()
 export class SupabaseAuthGuard implements CanActivate {
   private readonly logger = new Logger('AuthGuard');
   private supabase: SupabaseClient;
+  private readonly tokenCache = new Map<
+    string,
+    { user_id: string; user: any; expiresAt: number }
+  >();
 
   constructor(private readonly configService: ConfigService) {
     // Create a Supabase client using the project URL and anon key.
@@ -56,6 +76,13 @@ export class SupabaseAuthGuard implements CanActivate {
     // Extract the JWT token (everything after "Bearer ")
     const token = authHeader.split(' ')[1];
 
+    const cached = this.tokenCache.get(token);
+    if (cached && cached.expiresAt > Date.now()) {
+      request.user_id = cached.user_id;
+      request.user = cached.user;
+      return true;
+    }
+
     try {
       // Verify the token with Supabase. getUser() makes a call to Supabase's
       // auth server to validate the token's signature and check expiration.
@@ -72,6 +99,18 @@ export class SupabaseAuthGuard implements CanActivate {
       // a user_id from the request body or query params.
       request.user_id = data.user.id;
       request.user = data.user;
+
+      // Simple size cap: once full, drop the oldest insertion. Map preserves
+      // insertion order, so the first key is the least recently added.
+      if (this.tokenCache.size >= TOKEN_CACHE_MAX_ENTRIES) {
+        const oldest = this.tokenCache.keys().next().value;
+        if (oldest !== undefined) this.tokenCache.delete(oldest);
+      }
+      this.tokenCache.set(token, {
+        user_id: data.user.id,
+        user: data.user,
+        expiresAt: Date.now() + TOKEN_CACHE_TTL_MS,
+      });
 
       return true;
     } catch (err) {

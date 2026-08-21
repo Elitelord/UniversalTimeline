@@ -10,14 +10,20 @@ services:
         value: "3001"
       - key: DB_HOST
         sync: false
+      # Prod runs on Neon (see README), which listens on 5432. This was previously
+      # hardcoded to 6543 — Supabase's pooler port — which Neon does not serve. The
+      # dashboard must already override it, so leave the dashboard authoritative
+      # rather than risk a blueprint sync overwriting a working value.
       - key: DB_PORT
-        value: "6543"
+        sync: false
       - key: POSTGRES_USER
         sync: false
       - key: POSTGRES_PASSWORD
         sync: false
+      # Was hardcoded to "postgres"; Neon's default database is usually "neondb".
+      # Same reasoning as DB_PORT — the dashboard holds the real value.
       - key: POSTGRES_DB
-        value: "postgres"
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_ANON_KEY

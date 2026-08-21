@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { fetchTimeline } from '@/lib/api';
+import { fetchTimeline, searchTimeline } from '@/lib/api';
+import SearchResultsView from '@/components/SearchResultsView';
+import ActivityTypeFilter from '@/components/ActivityTypeFilter';
 import TimelineView from '@/components/TimelineView';
 import SummaryView from '@/components/SummaryView';
 import LogView from '@/components/LogView';
@@ -12,7 +14,6 @@ import SwimlaneView from '@/components/SwimlaneView';
 import ViewSwitcher from '@/components/ViewSwitcher';
 import { Activity, LayoutDashboard, LogOut, Search, X, Maximize2, Minimize2 } from 'lucide-react';
 import {
-  ACTIVITY_TYPES,
   DEFAULT_VIEW_MODE,
   VIEW_MODE_STORAGE_KEY,
   TimelineViewMode,
@@ -55,6 +56,17 @@ export default function TimelinePage() {
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Search scope. "all" queries the cross-date /search endpoint and ranks by
+  // relevance; "day" keeps the original behaviour of filtering the visible window.
+  const [searchScope, setSearchScope] = useState<'day' | 'all'>('all');
+  const [searchHasMore, setSearchHasMore] = useState(false);
+
+  // Request sequencing, so a slow response can't overwrite a newer one
+  const inFlightRef = useRef<AbortController | null>(null);
+  const requestSeqRef = useRef(0);
+
+  const isSearchMode = searchScope === 'all' && debouncedSearch.trim().length > 0;
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -105,14 +117,38 @@ export default function TimelinePage() {
     };
   }, [searchInput]);
 
-  // Fetch events when date, view mode, filters, or debounced search changes
+  // Fetch events when date, view mode, filters, or debounced search changes.
+  //
+  // Requests are sequenced and abortable: a cross-date search takes noticeably longer
+  // than a single-day fetch, so without a guard a slow earlier response can land after
+  // a fast later one and overwrite it.
   const loadEvents = useCallback(async () => {
     if (!session) return;
+
+    inFlightRef.current?.abort();
+    const controller = new AbortController();
+    inFlightRef.current = controller;
+    const requestId = ++requestSeqRef.current;
+
+    const isStale = () => requestId !== requestSeqRef.current;
 
     setLoadingEvents(true);
     setError(null);
 
     try {
+      if (isSearchMode) {
+        const { results, has_more } = await searchTimeline(session, debouncedSearch, {
+          activityTypes: activeTypes.length > 0 ? activeTypes : undefined,
+          limit: 100,
+          signal: controller.signal,
+        });
+        if (isStale()) return;
+        setDemoMode(false);
+        setSearchHasMore(has_more);
+        setEvents(results);
+        return;
+      }
+
       const filters: { activityTypes?: string[]; search?: string } = {};
       if (activeTypes.length > 0) filters.activityTypes = activeTypes;
       if (debouncedSearch) filters.search = debouncedSearch;
@@ -129,20 +165,32 @@ export default function TimelinePage() {
         endDate = week.end;
       }
 
-      const data = await fetchTimeline(session, startDate, endDate, filters);
+      const data = await fetchTimeline(
+        session,
+        startDate,
+        endDate,
+        filters,
+        controller.signal
+      );
+      if (isStale()) return;
       setDemoMode(!!(data as any).__demo);
       setEvents(data);
     } catch (err: any) {
+      // An abort means a newer request superseded this one — not an error to show.
+      if (err?.name === 'AbortError' || isStale()) return;
       setError(err.message);
       setEvents([]);
     } finally {
-      setLoadingEvents(false);
+      if (!isStale()) setLoadingEvents(false);
     }
-  }, [session, date, activeView, activeTypes, debouncedSearch]);
+  }, [session, date, activeView, activeTypes, debouncedSearch, isSearchMode]);
 
   useEffect(() => {
     loadEvents();
   }, [loadEvents]);
+
+  // Abort any in-flight request when the page unmounts
+  useEffect(() => () => inFlightRef.current?.abort(), []);
 
   const goToPreviousDay = () => {
     setDate((prev) => getShiftedDate(prev, -1));
@@ -169,6 +217,7 @@ export default function TimelinePage() {
     setActiveTypes([]);
     setSearchInput('');
     setDebouncedSearch('');
+    setSearchHasMore(false);
   };
 
   if (authLoading) {
@@ -265,7 +314,11 @@ export default function TimelinePage() {
           <div className="flex items-center gap-2">
             {/* View Switcher (Timeline Tab Only) */}
             {activeTab === 'timeline' && (
-              <ViewSwitcher activeView={activeView} onChange={handleViewChange} />
+              <ViewSwitcher
+                activeView={activeView}
+                onChange={handleViewChange}
+                disabled={isSearchMode}
+              />
             )}
 
             {/* Fullscreen Toggle */}
@@ -347,37 +400,39 @@ export default function TimelinePage() {
               )}
             </div>
 
-            {/* Activity Type Toggle Chips */}
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-              {ACTIVITY_TYPES.map((t) => {
-                const isActive = activeTypes.includes(t.value);
-                return (
+            {/* Search Scope — only meaningful once something has been typed */}
+            {searchInput && (
+              <div className="flex items-center gap-1 p-0.5 bg-zinc-900/60 border border-zinc-800/80 rounded-lg shrink-0">
+                {(['all', 'day'] as const).map((scope) => (
                   <button
-                    key={t.value}
-                    onClick={() => toggleType(t.value)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors duration-150 cursor-pointer border ${
-                      isActive
-                        ? 'bg-zinc-800 text-zinc-100 border-zinc-700'
-                        : 'bg-zinc-900/50 text-zinc-500 border-zinc-800/80 hover:text-zinc-300 hover:border-zinc-700'
+                    key={scope}
+                    onClick={() => setSearchScope(scope)}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors duration-150 cursor-pointer ${
+                      searchScope === scope
+                        ? 'bg-zinc-800 text-zinc-100'
+                        : 'text-zinc-500 hover:text-zinc-300'
                     }`}
                     type="button"
                   >
-                    <div
-                      className={`w-2 h-2 rounded-full ${t.color} ${
-                        isActive ? 'opacity-100' : 'opacity-40'
-                      }`}
-                    />
-                    {t.label}
+                    {scope === 'all' ? 'All time' : 'This view'}
                   </button>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            )}
 
-            {/* Clear Filters */}
+            {/* Activity Type Filter — a multiselect dropdown rather than a chip row,
+                which grew unwieldy once the taxonomy expanded to 12 types. */}
+            <ActivityTypeFilter
+              activeTypes={activeTypes}
+              onToggle={toggleType}
+              onClear={() => setActiveTypes([])}
+            />
+
+            {/* Clear all filters (types + search) */}
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-zinc-400 hover:text-zinc-100 border border-zinc-800 rounded-lg hover:bg-zinc-800/50 transition-colors duration-150 cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-zinc-400 hover:text-zinc-100 border border-zinc-800 rounded-lg hover:bg-zinc-800/50 transition-colors duration-150 cursor-pointer shrink-0"
                 type="button"
               >
                 <X className="w-3 h-3" />
@@ -403,7 +458,8 @@ export default function TimelinePage() {
               </div>
             )}
 
-            {error && !demoMode && !isFullscreen && (
+            {/* In search mode the results panel renders its own error state */}
+            {error && !demoMode && !isFullscreen && !isSearchMode && (
               <div className={`mb-4 p-4 bg-red-500/10 border border-red-500/20 ${RADIUS.surface} flex items-start gap-3`}>
                 <div className="p-2 bg-red-500/10 rounded-lg text-red-400 shrink-0">
                   <Activity className="w-5 h-5" />
@@ -415,7 +471,19 @@ export default function TimelinePage() {
               </div>
             )}
 
-            {loadingEvents ? (
+            {/* Search results replace whichever view is active, rather than being a
+                view mode of their own — the view-mode list is duplicated in three
+                places and adding a member means touching all of them. */}
+            {isSearchMode ? (
+              <SearchResultsView
+                events={events}
+                query={debouncedSearch}
+                loading={loadingEvents}
+                hasMore={searchHasMore}
+                error={error}
+                isFullscreen={isFullscreen}
+              />
+            ) : loadingEvents ? (
               <div className="flex items-center justify-center py-24">
                 <div className="w-6 h-6 border-2 border-zinc-500 border-t-transparent rounded-full animate-spin" />
               </div>

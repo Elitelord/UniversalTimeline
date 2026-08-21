@@ -83,8 +83,11 @@ export default function EventPopup({ event, onClose }: EventPopupProps) {
                   {Object.entries(event.metadata).map(([key, value]) => (
                     <div key={key} className="flex flex-col text-sm">
                       <span className="text-xs text-zinc-500 capitalize">{key.replace(/_/g, ' ')}</span>
-                      <span className="text-zinc-300 font-mono text-xs mt-0.5 break-all bg-zinc-950/50 p-1.5 rounded-md border border-zinc-800/30">
-                        {String(value)}
+                      <span className="text-zinc-300 font-mono text-xs mt-0.5 break-all bg-zinc-950/50 p-1.5 rounded-md border border-zinc-800/30 whitespace-pre-wrap">
+                        {/* String() on a nested object yields "[object Object]" */}
+                        {value !== null && typeof value === 'object'
+                          ? JSON.stringify(value, null, 2)
+                          : String(value)}
                       </span>
                     </div>
                   ))}

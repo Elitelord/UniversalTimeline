@@ -1,16 +1,15 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ListFilter, Monitor, Clock } from 'lucide-react';
+import { Monitor, Clock } from 'lucide-react';
 import EventPopup from '@/components/EventPopup';
+import EventRow from '@/components/EventRow';
 import {
   TimelineEvent,
-  formatTime,
-  formatDuration,
   filterShortEvents,
   formatDayHeader,
 } from '@/lib/timeline-utils';
-import { getActivityColor, RADIUS } from '@/lib/design-tokens';
+import { RADIUS } from '@/lib/design-tokens';
 
 interface LogViewProps {
   events: TimelineEvent[];
@@ -129,61 +128,9 @@ export default function LogView({ events, date, isFullscreen = false }: LogViewP
 
                   {/* Hour Event Rows (Hairline Separators) */}
                   <div className="divide-y divide-zinc-800/20">
-                    {group.events.map((event) => {
-                      const colors = getActivityColor(event.activity_type);
-                      const isRunning = !event.end_time;
-
-                      return (
-                        <div
-                          key={event.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => setExpandedEvent(event)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              setExpandedEvent(event);
-                            }
-                          }}
-                          className="flex items-center gap-4 px-6 py-2.5 hover:bg-zinc-800/30 transition-colors duration-150 cursor-pointer group focus:outline-none focus:bg-zinc-800/40"
-                        >
-                          {/* Time Column */}
-                          <div className="w-20 shrink-0 font-mono text-xs text-zinc-400 text-right">
-                            {formatTime(event.start_time)}
-                          </div>
-
-                          {/* Category Dot */}
-                          <div
-                            className={`w-2 h-2 rounded-full shrink-0 ${colors.bg}`}
-                            title={event.activity_type}
-                          />
-
-                          {/* App & Activity Name */}
-                          <div className="flex-1 min-w-0 flex items-center gap-2">
-                            <span className="text-sm font-medium text-zinc-200 truncate group-hover:text-white transition-colors">
-                              {event.activity_name}
-                            </span>
-                            {isRunning && (
-                              <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                active
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Category Tag */}
-                          <div className="hidden sm:block shrink-0">
-                            <span className={`text-[11px] font-medium capitalize ${colors.text}`}>
-                              {event.activity_type}
-                            </span>
-                          </div>
-
-                          {/* Duration Badge */}
-                          <div className="shrink-0 font-mono text-xs text-zinc-400 bg-zinc-900/80 px-2 py-0.5 rounded-md border border-zinc-800/60 min-w-[3.75rem] text-right">
-                            {event.end_time ? formatDuration(event.start_time, event.end_time) : 'Running'}
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {group.events.map((event) => (
+                      <EventRow key={event.id} event={event} onSelect={setExpandedEvent} />
+                    ))}
                   </div>
                 </div>
               ))}

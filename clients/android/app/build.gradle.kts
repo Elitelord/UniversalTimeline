@@ -22,8 +22,15 @@ android {
         applicationId = "com.example.universaltimeline"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.0.5"
+
+        // Version is driven by the release tag in CI (see .github/workflows/release.yml),
+        // which sets VERSION_NAME / VERSION_CODE from the pushed tag. The fallbacks are
+        // only for local dev builds. Previously both were hardcoded, so every release
+        // shipped versionName "0.0.5" and versionCode 1 — the in-app updater therefore
+        // always saw the newer tag as an update (even right after updating), and a
+        // never-incrementing versionCode could block sideloaded upgrades.
+        versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
+        versionName = System.getenv("VERSION_NAME") ?: "0.0.5"
 
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")

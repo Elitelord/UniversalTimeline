@@ -1,10 +1,13 @@
-// src/events/entities/event.entity.ts
-import { Entity, Column, PrimaryColumn, CreateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryColumn, CreateDateColumn, Index } from 'typeorm';
 
+// The b-tree that every timeline/search range query relies on must be declared here
+// rather than in SQL: `synchronize: true` drops any plain-column index it doesn't
+// know about, so a hand-written one would disappear on the next boot. The GIN
+// indexes in src/search/bootstrap-statements.ts survive only because they are pure
+// expression indexes, which TypeORM cannot see.
+@Index(['user_id', 'start_time'])
 @Entity('activity_events')
 export class Event {
-  
-
   @PrimaryColumn({ type: 'uuid' })
   id: string;
 

@@ -1,5 +1,6 @@
 import { Session } from '@supabase/supabase-js';
 import { generateDemoTimeline, generateDemoSummary } from './demo-data';
+import type { TimelineEvent } from './timeline-utils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -9,6 +10,10 @@ export class DemoFallbackError extends Error {
     super('DEMO_FALLBACK');
     this.name = 'DemoFallbackError';
   }
+}
+
+function authHeaders(session: Session): HeadersInit {
+  return { Authorization: `Bearer ${session.access_token}` };
 }
 
 async function fetchWithGracefulError(url: string, options: RequestInit) {
@@ -46,7 +51,8 @@ export async function fetchTimeline(
   session: Session,
   startDate: string,
   endDate: string,
-  filters?: { activityTypes?: string[]; search?: string }
+  filters?: { activityTypes?: string[]; search?: string },
+  signal?: AbortSignal
 ) {
   const startDateLocal = new Date(`${startDate}T00:00:00`);
   const startISO = startDateLocal.toISOString();
@@ -70,13 +76,12 @@ export async function fetchTimeline(
   try {
     return await fetchWithGracefulError(
       `${API_URL}/timeline?${params.toString()}`,
-      {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      }
+      { headers: authHeaders(session), signal }
     );
-  } catch {
+  } catch (err) {
+    // A caller-initiated abort is not a backend failure — let it propagate so the
+    // page can discard the stale response instead of rendering demo data over it.
+    if (err instanceof DOMException && err.name === 'AbortError') throw err;
     // Backend unreachable — return demo data and signal the caller
     const demoEvents = generateDemoTimeline(startDate);
     // Attach a marker so the page component knows this is demo data
@@ -105,9 +110,7 @@ export async function fetchSummary(
 
   try {
     return await fetchWithGracefulError(`${API_URL}/summary?${params.toString()}`, {
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
+      headers: authHeaders(session),
     });
   } catch {
     // Backend unreachable — return demo summary
@@ -115,4 +118,45 @@ export async function fetchSummary(
     (demoSummary as any).__demo = true;
     return demoSummary;
   }
+}
+
+export interface SearchResponse {
+  results: TimelineEvent[];
+  has_more: boolean;
+}
+
+/**
+ * Cross-date relevance-ranked search.
+ *
+ * Unlike fetchTimeline/fetchSummary this deliberately does NOT fall back to demo
+ * data. There is no sensible demo answer to an arbitrary query — the demo schedule
+ * has eight app names, so almost everything would come back empty and read as a
+ * broken feature. Errors propagate and the UI shows them.
+ */
+export async function searchTimeline(
+  session: Session,
+  query: string,
+  opts?: {
+    from?: string;
+    to?: string;
+    activityTypes?: string[];
+    limit?: number;
+    offset?: number;
+    signal?: AbortSignal;
+  }
+): Promise<SearchResponse> {
+  const params = new URLSearchParams({ q: query });
+
+  if (opts?.from) params.set('from', opts.from);
+  if (opts?.to) params.set('to', opts.to);
+  if (opts?.activityTypes && opts.activityTypes.length > 0) {
+    params.set('activity_type', opts.activityTypes.join(','));
+  }
+  if (opts?.limit !== undefined) params.set('limit', String(opts.limit));
+  if (opts?.offset !== undefined) params.set('offset', String(opts.offset));
+
+  return fetchWithGracefulError(`${API_URL}/search?${params.toString()}`, {
+    headers: authHeaders(session),
+    signal: opts?.signal,
+  });
 }

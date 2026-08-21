@@ -3,14 +3,20 @@ import { Event } from '../events/event.entity';
 
 @Injectable()
 export class MergeService {
-    mergeEvents(events: Event[]): Event[] {  
+    mergeEvents(events: Event[]): Event[] {
         const mergedEvents: Event[] = [];
-        let eventsCopy = events.filter((event): event is Event & { end_time: Date } => event.start_time !== null && event.end_time !== null);
-        
+
+        // Events still in progress (no end_time yet) can't participate in merging —
+        // merging is defined by the previous event's end_time. Set them aside and
+        // pass them through untouched rather than dropping them, so the timeline can
+        // show "currently running" activity.
+        const openEvents = events.filter(event => event.start_time !== null && event.end_time === null);
+        const eventsCopy = events.filter((event): event is Event & { end_time: Date } => event.start_time !== null && event.end_time !== null);
+
         if (eventsCopy.length <= 1) {
-            return eventsCopy;
+            return [...eventsCopy, ...openEvents].sort((a, b) => a.start_time.getTime() - b.start_time.getTime());
         }
-        
+
         eventsCopy.sort((a,b) => a.start_time.getTime() - b.start_time.getTime());
         
         // Track the most recent active event for each unique activity signature
@@ -52,10 +58,11 @@ export class MergeService {
         for (const event of activeEvents.values()) {
             mergedEvents.push(event);
         }
-        
-        // Re-sort the final merged list by start_time
+
+        // Fold the in-progress events back in, then re-sort the whole list by start_time
+        mergedEvents.push(...openEvents);
         mergedEvents.sort((a, b) => a.start_time.getTime() - b.start_time.getTime());
-        
+
         return mergedEvents;
     }
 }

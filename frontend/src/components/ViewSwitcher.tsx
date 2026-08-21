@@ -6,6 +6,8 @@ import { TimelineViewMode, RADIUS } from '@/lib/design-tokens';
 interface ViewSwitcherProps {
   activeView: TimelineViewMode;
   onChange: (view: TimelineViewMode) => void;
+  /** Search results replace the active view, so switching views has no effect. */
+  disabled?: boolean;
 }
 
 interface ViewOption {
@@ -21,9 +23,14 @@ const VIEW_OPTIONS: readonly ViewOption[] = [
   { value: 'swimlane', label: 'Swimlane', icon: Rows3 },
 ] as const;
 
-export default function ViewSwitcher({ activeView, onChange }: ViewSwitcherProps) {
+export default function ViewSwitcher({ activeView, onChange, disabled = false }: ViewSwitcherProps) {
   return (
-    <div className="flex items-center">
+    <div
+      className={`flex items-center transition-opacity duration-150 ${
+        disabled ? 'opacity-40 pointer-events-none' : ''
+      }`}
+      aria-hidden={disabled}
+    >
       {/* Desktop & Tablet Segmented Control */}
       <div className={`hidden sm:flex items-center gap-0.5 bg-zinc-900/60 p-0.5 ${RADIUS.control} border border-zinc-800`}>
         {VIEW_OPTIONS.map((opt) => {
@@ -33,6 +40,7 @@ export default function ViewSwitcher({ activeView, onChange }: ViewSwitcherProps
             <button
               key={opt.value}
               onClick={() => onChange(opt.value)}
+              disabled={disabled}
               className={`flex items-center gap-1.5 px-3 py-1.5 ${RADIUS.control} text-xs font-medium transition-colors duration-150 cursor-pointer ${
                 isActive
                   ? 'bg-zinc-800 text-zinc-100 shadow-sm'
@@ -53,6 +61,7 @@ export default function ViewSwitcher({ activeView, onChange }: ViewSwitcherProps
         <select
           value={activeView}
           onChange={(e) => onChange(e.target.value as TimelineViewMode)}
+          disabled={disabled}
           aria-label="Select timeline view"
           className={`px-3 py-1.5 bg-zinc-900 border border-zinc-800 ${RADIUS.control} text-zinc-200 text-xs font-medium
                      focus:outline-none focus:ring-1 focus:ring-zinc-400 focus:border-zinc-500 cursor-pointer [color-scheme:dark]`}

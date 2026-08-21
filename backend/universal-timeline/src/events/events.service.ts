@@ -1,10 +1,33 @@
 import { Injectable } from '@nestjs/common';
 import { CreateEventDto } from './event.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, Between } from 'typeorm';
 import { Event } from './event.entity';
 import { MergeService } from '../processing/merge.service';
+import { ClassifierService } from '../processing/classifier.service';
+import { escapeLikePattern } from '../common/escape-like';
 import { createHash } from 'crypto';
+
+/** Runaway guard for a single timeline window; the range is already bounded by dates. */
+const TIMELINE_FETCH_CAP = 5000;
+
+/**
+ * How far either side of an incoming batch to look for events it might merge into.
+ * Only needs to exceed MergeService's 60s gap threshold; 5 minutes gives margin for
+ * clock skew between a client and the server without pulling in unrelated history.
+ */
+const MERGE_CANDIDATE_PADDING_MS = 5 * 60 * 1000;
+
+/** Safety cap on the candidate query — the time window already bounds it. */
+const MERGE_CANDIDATE_CAP = 1000;
+
+/**
+ * Point-in-time event types. Their "duration" is meaningless (a notification is an
+ * instant; idle is the opposite of active time), so they are excluded from the
+ * summary's time aggregations — otherwise they inflate "active time" (measured at
+ * ~17% of the total, mostly idle). They remain visible and filterable in the timeline.
+ */
+const SIGNAL_ACTIVITY_TYPES = ['notification', 'screen', 'idle'];
 
 @Injectable()
 export class EventsService {
@@ -12,6 +35,7 @@ export class EventsService {
     @InjectRepository(Event)
     private readonly eventRepository: Repository<Event>,
     private readonly mergeService: MergeService,
+    private readonly classifierService: ClassifierService,
   ) {}
   
   async create(createEventDto: CreateEventDto | CreateEventDto[]) {
@@ -27,6 +51,14 @@ export class EventsService {
         }
         newEventList.push(newEvent);
       }
+      // Normalise the type before anything else looks at it: MergeService keys on
+      // activity_type, so reclassifying afterwards would change what merges with what.
+      // Note the hash below deliberately does not include activity_type, so this
+      // cannot affect duplicate detection.
+      for (const event of newEventList) {
+        this.classifierService.applyTo(event);
+      }
+
       for(const event of newEventList) {
         event.idempotency_hash = createHash('sha256').update(event.device_id + event.activity_name + event.start_time.toISOString()).digest('hex');
       }
@@ -41,18 +73,43 @@ export class EventsService {
       const uniqueUserIds = [...new Set(nonExistingEvents.map(e => e.user_id))];
       const uniqueDeviceIds = [...new Set(nonExistingEvents.map(e => e.device_id))];
       
+      // Merge candidates must be selected by TIME, not by a fixed row count.
+      // A `take: 100` window silently failed whenever a batch was larger than 100
+      // events, or when the event a new one should have merged into had already aged
+      // out of the 100 most recent rows — measured at 515 unmerged events that met
+      // the merge criteria exactly. Scope to the incoming batch's own time range,
+      // widened by the merge gap so events on either edge can still join.
       let recentDbEvents: Event[] = [];
-      if (uniqueUserIds.length > 0 && uniqueDeviceIds.length > 0) {
+      if (nonExistingEvents.length > 0) {
+        const times = nonExistingEvents.map(e => e.start_time.getTime());
+        const windowStart = new Date(Math.min(...times) - MERGE_CANDIDATE_PADDING_MS);
+        const windowEnd = new Date(Math.max(...times) + MERGE_CANDIDATE_PADDING_MS);
+
         recentDbEvents = await this.eventRepository.find({
-          where: { user_id: In(uniqueUserIds), device_id: In(uniqueDeviceIds) },
+          where: {
+            user_id: In(uniqueUserIds),
+            device_id: In(uniqueDeviceIds),
+            start_time: Between(windowStart, windowEnd),
+          },
           order: { start_time: 'DESC' },
-          take: 100
+          take: MERGE_CANDIDATE_CAP,
         });
       }
-      
+
       const mergedEvents = this.mergeService.mergeEvents([...recentDbEvents, ...nonExistingEvents]);
-      
-      const toSave = mergedEvents.filter(e => !e.id || (e as any)._isModified);
+
+      // Save every event that isn't an unchanged pre-existing DB row: i.e. all new
+      // events (merged or lone) plus any existing row the merge extended.
+      //
+      // The previous filter was `!e.id || _isModified`, which assumed new events had
+      // no id yet — but clients always supply a UUID (CreateEventDto requires it), so
+      // `!e.id` was never true and any new event that didn't merge was silently
+      // dropped. That regressed ingest on 2026-08-15 (commit dbfc4dc) and cut saved
+      // volume by ~65%. Track the pre-existing ids explicitly instead.
+      const existingDbIds = new Set(recentDbEvents.map(e => e.id));
+      const toSave = mergedEvents.filter(
+        e => !existingDbIds.has(e.id) || (e as any)._isModified,
+      );
       return this.eventRepository.save(toSave);
     } else {
       return this.create([createEventDto as CreateEventDto]);
@@ -80,16 +137,22 @@ export class EventsService {
     }
 
     if (search) {
-      query.andWhere('event.activity_name ILIKE :search', { search: `%${search}%` });
+      query.andWhere('event.activity_name ILIKE :search ESCAPE \'\\\'', {
+        search: `%${escapeLikePattern(search)}%`,
+      });
     }
 
+    // Merge must run over the whole bounded window, not a page slice — otherwise a
+    // session straddling a page boundary gets split into two half-sessions. The range
+    // is always bounded (a day, three days, or a week), so fetching it whole is safe;
+    // TIMELINE_FETCH_CAP is just a runaway guard.
     const events = await query
       .orderBy('event.start_time', 'ASC')
-      .skip(page * limit)
-      .take(limit)
+      .take(TIMELINE_FETCH_CAP)
       .getMany();
-      
-    return this.mergeService.mergeEvents(events);
+
+    const merged = this.mergeService.mergeEvents(events);
+    return merged.slice(page * limit, page * limit + limit);
   }
   async getSummary(
     user_id: string,
@@ -108,6 +171,7 @@ export class EventsService {
         .andWhere('event.start_time >= :start', { start })
         .andWhere("event.start_time < CAST(:end AS date) + INTERVAL '1 day'", { end })
         .andWhere('event.end_time IS NOT NULL')
+        .andWhere('event.activity_type NOT IN (:...signalTypes)', { signalTypes: SIGNAL_ACTIVITY_TYPES })
         .select('event.activity_type')
         .addSelect('SUM(EXTRACT(EPOCH FROM (event.end_time - event.start_time)) / 60)', 'duration')
         .addSelect('COUNT(*)', 'count')
@@ -122,6 +186,7 @@ export class EventsService {
         .andWhere('event.start_time >= :start', { start })
         .andWhere("event.start_time < CAST(:end AS date) + INTERVAL '1 day'", { end })
         .andWhere('event.end_time IS NOT NULL')
+        .andWhere('event.activity_type NOT IN (:...signalTypes)', { signalTypes: SIGNAL_ACTIVITY_TYPES })
         .select('event.activity_name')
         .addSelect('MAX(event.activity_type)', 'activity_type')
         .addSelect('SUM(EXTRACT(EPOCH FROM (event.end_time - event.start_time)) / 60)', 'total_minutes')
@@ -137,6 +202,7 @@ export class EventsService {
         .andWhere('event.start_time >= :start', { start })
         .andWhere("event.start_time < CAST(:end AS date) + INTERVAL '1 day'", { end })
         .andWhere('event.end_time IS NOT NULL')
+        .andWhere('event.activity_type NOT IN (:...signalTypes)', { signalTypes: SIGNAL_ACTIVITY_TYPES })
         .select("TO_CHAR(event.start_time, 'YYYY-MM-DD')", 'date')
         .addSelect('event.activity_type', 'activity_type')
         .addSelect('SUM(EXTRACT(EPOCH FROM (event.end_time - event.start_time)) / 60)', 'duration')

@@ -108,6 +108,51 @@ export function filterShortEvents(
 }
 
 /**
+ * Splits text into alternating matched/unmatched segments for search highlighting.
+ *
+ * Returns plain data rather than JSX so this module stays a pure .ts file that can be
+ * unit-tested without a renderer; the calling component decides how to mark a match.
+ *
+ * Matching is case-insensitive and literal — the query is escaped before it reaches
+ * the regex, so a user typing "c++" or "a.b" gets the substring they expect rather
+ * than a regex error or a wildcard.
+ */
+export function splitOnMatch(
+  text: string,
+  query: string
+): { text: string; match: boolean }[] {
+  const trimmed = query.trim();
+  if (!trimmed) return [{ text, match: false }];
+
+  // Search terms are whitespace-separated; highlight each independently so that
+  // "vs code" marks both words even when they aren't adjacent in the title.
+  const terms = trimmed
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (terms.length === 0) return [{ text, match: false }];
+
+  const pattern = new RegExp(`(${terms.join('|')})`, 'gi');
+  const segments: { text: string; match: boolean }[] = [];
+  let lastIndex = 0;
+
+  for (const m of text.matchAll(pattern)) {
+    const index = m.index ?? 0;
+    if (index > lastIndex) {
+      segments.push({ text: text.slice(lastIndex, index), match: false });
+    }
+    segments.push({ text: m[0], match: true });
+    lastIndex = index + m[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ text: text.slice(lastIndex), match: false });
+  }
+
+  return segments.length > 0 ? segments : [{ text, match: false }];
+}
+
+/**
  * Groups events by their starting hour (0 to 23) in the user's local timezone.
  */
 export function groupEventsByHour(events: TimelineEvent[]): Map<number, TimelineEvent[]> {

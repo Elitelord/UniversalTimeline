@@ -7,6 +7,14 @@ export interface ActivityTypeToken {
   label: string;
   hex: string;
   color: string; // Solid badge dot color
+  /**
+   * 'activity' — time actually spent doing something. Counts toward duration totals
+   *   and gets a line on the trend chart.
+   * 'signal' — a point-in-time fact (a notification arriving, the screen turning on).
+   *   These have near-zero duration by nature, so including them in "hours spent"
+   *   would be misleading. Filterable, but excluded from duration views.
+   */
+  kind: 'activity' | 'signal';
   tw: {
     bg: string;
     tintBg: string;
@@ -15,12 +23,24 @@ export interface ActivityTypeToken {
   };
 }
 
+// Every activity_type the clients can emit must appear here. This one array drives
+// the trend-chart series, the filter chips, and every color lookup — so a type that
+// is missing is not merely uncolored, it is invisible: it gets no line on the trend
+// chart and no chip to filter by. Before these six were added, 87% of all tracked
+// time (66 of 76 hours) was silently absent from the trend chart.
+//
+// Producers, for reference:
+//   coding/browsing/communication/design/productivity/other  -> Windows (ActivityTracker.ClassifyActivity)
+//   browsing/communication/productivity/media/application    -> Android (UsageTracker.classifyActivity)
+//   notification                                             -> Android (NotificationTracker)
+//   screen/idle                                              -> Android (ScreenReceiver)
 export const ACTIVITY_TYPES: readonly ActivityTypeToken[] = [
   {
     value: 'coding',
     label: 'Coding',
     hex: '#3b82f6',
     color: 'bg-blue-500',
+    kind: 'activity',
     tw: {
       bg: 'bg-blue-500',
       tintBg: 'bg-blue-500/10',
@@ -33,6 +53,7 @@ export const ACTIVITY_TYPES: readonly ActivityTypeToken[] = [
     label: 'Browsing',
     hex: '#10b981',
     color: 'bg-emerald-500',
+    kind: 'activity',
     tw: {
       bg: 'bg-emerald-500',
       tintBg: 'bg-emerald-500/10',
@@ -45,6 +66,7 @@ export const ACTIVITY_TYPES: readonly ActivityTypeToken[] = [
     label: 'Communication',
     hex: '#a855f7',
     color: 'bg-purple-500',
+    kind: 'activity',
     tw: {
       bg: 'bg-purple-500',
       tintBg: 'bg-purple-500/10',
@@ -57,6 +79,7 @@ export const ACTIVITY_TYPES: readonly ActivityTypeToken[] = [
     label: 'Design',
     hex: '#f59e0b',
     color: 'bg-amber-500',
+    kind: 'activity',
     tw: {
       bg: 'bg-amber-500',
       tintBg: 'bg-amber-500/10',
@@ -69,6 +92,7 @@ export const ACTIVITY_TYPES: readonly ActivityTypeToken[] = [
     label: 'Productivity',
     hex: '#14b8a6',
     color: 'bg-teal-500',
+    kind: 'activity',
     tw: {
       bg: 'bg-teal-500',
       tintBg: 'bg-teal-500/10',
@@ -76,11 +100,127 @@ export const ACTIVITY_TYPES: readonly ActivityTypeToken[] = [
       text: 'text-teal-400',
     },
   },
+  {
+    value: 'media',
+    label: 'Media',
+    hex: '#ec4899',
+    color: 'bg-pink-500',
+    kind: 'activity',
+    tw: {
+      bg: 'bg-pink-500',
+      tintBg: 'bg-pink-500/10',
+      tintBorder: 'border-pink-500/20',
+      text: 'text-pink-400',
+    },
+  },
+  {
+    // Android's fallback for any foreground app its classifier doesn't recognise.
+    // The single largest bucket in the data (1,930 events).
+    value: 'application',
+    label: 'Apps',
+    hex: '#6366f1',
+    color: 'bg-indigo-500',
+    kind: 'activity',
+    tw: {
+      bg: 'bg-indigo-500',
+      tintBg: 'bg-indigo-500/10',
+      tintBorder: 'border-indigo-500/20',
+      text: 'text-indigo-400',
+    },
+  },
+  {
+    // Windows' fallback, from ActivityEvent.cs's default and ClassifyActivity's
+    // final case. The server-side classifier should shrink this over time.
+    value: 'other',
+    label: 'Other',
+    hex: '#94a3b8',
+    color: 'bg-slate-400',
+    kind: 'activity',
+    tw: {
+      bg: 'bg-slate-400',
+      tintBg: 'bg-slate-400/10',
+      tintBorder: 'border-slate-400/20',
+      text: 'text-slate-300',
+    },
+  },
+  {
+    // Produced by the server-side classifier for shells and system UI
+    // (explorer, SearchHost, lock screen) — real foreground time, but not
+    // something you chose to do.
+    value: 'system',
+    label: 'System',
+    hex: '#a1a1aa',
+    color: 'bg-zinc-400',
+    kind: 'activity',
+    tw: {
+      bg: 'bg-zinc-400',
+      tintBg: 'bg-zinc-400/10',
+      tintBorder: 'border-zinc-400/20',
+      text: 'text-zinc-300',
+    },
+  },
+  {
+    value: 'notification',
+    label: 'Notifications',
+    hex: '#f97316',
+    color: 'bg-orange-500',
+    kind: 'signal',
+    tw: {
+      bg: 'bg-orange-500',
+      tintBg: 'bg-orange-500/10',
+      tintBorder: 'border-orange-500/20',
+      text: 'text-orange-400',
+    },
+  },
+  {
+    value: 'screen',
+    label: 'Screen on/off',
+    hex: '#22d3ee',
+    color: 'bg-cyan-400',
+    kind: 'signal',
+    tw: {
+      bg: 'bg-cyan-400',
+      tintBg: 'bg-cyan-400/10',
+      tintBorder: 'border-cyan-400/20',
+      text: 'text-cyan-300',
+    },
+  },
+  {
+    value: 'idle',
+    label: 'Idle',
+    hex: '#64748b',
+    color: 'bg-slate-500',
+    kind: 'signal',
+    tw: {
+      bg: 'bg-slate-500',
+      tintBg: 'bg-slate-500/10',
+      tintBorder: 'border-slate-500/20',
+      text: 'text-slate-400',
+    },
+  },
 ] as const;
 
+/** Types representing real elapsed time — the only ones that belong in duration totals. */
+export const DURATION_ACTIVITY_TYPES: readonly ActivityTypeToken[] = ACTIVITY_TYPES.filter(
+  (t) => t.kind === 'activity'
+);
+
+/** Point-in-time types, rendered separately in the filter bar. */
+export const SIGNAL_ACTIVITY_TYPES: readonly ActivityTypeToken[] = ACTIVITY_TYPES.filter(
+  (t) => t.kind === 'signal'
+);
+
+/** True for types that measure elapsed time rather than mark an instant. */
+export function isDurationType(type?: string | null): boolean {
+  return getActivityToken(type).kind !== 'signal';
+}
+
+// Fallback for a type no client is known to emit. Treated as an activity so that
+// unexpected future types still count toward totals rather than vanishing.
 export const DEFAULT_ACTIVITY_COLOR = {
   hex: '#71717a',
   color: 'bg-zinc-500',
+  kind: 'activity' as const,
   tw: {
     bg: 'bg-zinc-500',
     tintBg: 'bg-zinc-500/10',

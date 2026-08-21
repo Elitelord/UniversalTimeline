@@ -39,13 +39,64 @@ describe('MergeService', () => {
     expect(result[0].id).toBe('single');
   });
 
-  it('should filter out events with null end_time', () => {
+  // In-progress events (no end_time) can't be merged, but they must still be returned —
+  // the timeline renders them as "Running" and search needs to be able to find them.
+  it('should pass through events with null end_time instead of dropping them', () => {
     const events = [
       createEvent({ id: '1', end_time: null }),
       createEvent({ id: '2', end_time: null }),
     ];
     const result = service.mergeEvents(events);
-    expect(result).toHaveLength(0);
+    expect(result).toHaveLength(2);
+    expect(result.map((e) => e.id).sort()).toEqual(['1', '2']);
+  });
+
+  it('should keep an in-progress event alongside merged completed events', () => {
+    const events = [
+      createEvent({
+        id: 'done-1',
+        start_time: new Date('2026-06-10T08:00:00Z'),
+        end_time: new Date('2026-06-10T09:00:00Z'),
+      }),
+      createEvent({
+        id: 'done-2',
+        start_time: new Date('2026-06-10T09:00:00Z'),
+        end_time: new Date('2026-06-10T10:00:00Z'),
+      }),
+      createEvent({
+        id: 'running',
+        start_time: new Date('2026-06-10T11:00:00Z'),
+        end_time: null,
+      }),
+    ];
+    const result = service.mergeEvents(events);
+    // done-1 + done-2 merge into one; running survives untouched
+    expect(result).toHaveLength(2);
+    expect(result[0].end_time).toEqual(new Date('2026-06-10T10:00:00Z'));
+    expect(result[1].id).toBe('running');
+    expect(result[1].end_time).toBeNull();
+  });
+
+  it('should return the in-progress event when it is the only input', () => {
+    const result = service.mergeEvents([createEvent({ id: 'running', end_time: null })]);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('running');
+  });
+
+  it('should merge a session that would straddle a page boundary', () => {
+    // Ten contiguous 1-minute slices of the same activity. Before the pagination fix,
+    // slicing at 5 would hand mergeEvents two halves and produce two sessions.
+    const events = Array.from({ length: 10 }, (_, i) =>
+      createEvent({
+        id: `slice-${i}`,
+        start_time: new Date(Date.UTC(2026, 5, 10, 8, i, 0)),
+        end_time: new Date(Date.UTC(2026, 5, 10, 8, i + 1, 0)),
+      }),
+    );
+    const result = service.mergeEvents(events);
+    expect(result).toHaveLength(1);
+    expect(result[0].start_time).toEqual(new Date(Date.UTC(2026, 5, 10, 8, 0, 0)));
+    expect(result[0].end_time).toEqual(new Date(Date.UTC(2026, 5, 10, 8, 10, 0)));
   });
 
   // --- Core Merge Logic ---

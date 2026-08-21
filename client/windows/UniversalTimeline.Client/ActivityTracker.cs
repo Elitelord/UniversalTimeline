@@ -3,19 +3,29 @@ using Microsoft.Win32;
 namespace UniversalTimeline.Client;
 
 /// <summary>
-/// Core tracking loop. Polls the foreground window every 5 seconds,
-/// detects application switches, idle periods (2+ min), and screen lock/unlock.
+/// Core tracking loop. Polls the foreground window every 5 seconds, detects
+/// application switches, window-title changes for title-significant apps (browser
+/// tabs, editor files — debounced ~10s), idle periods (2+ min, with the idle span
+/// trimmed from the event), and screen lock/unlock.
 /// </summary>
 public class ActivityTracker : IDisposable
 {
     private const int IdleThresholdMs = 2 * 60 * 1000; // 2 minutes
     private const int PollIntervalMs = 5_000;           // 5 seconds
 
+    // For apps whose window title carries real meaning (browser tabs, editor files,
+    // Slack channels), a title change starts a new event. The new title must persist
+    // for this many consecutive polls (~10s) before we split, so rapidly-churning
+    // titles (media players, progress bars) don't produce a storm of tiny events.
+    private const int TitleChangeStabilityPolls = 2;
+
     private readonly System.Threading.Timer _pollTimer;
 
     private string? _currentProcessName;
     private string? _currentWindowTitle;
     private ActivityEvent? _currentEvent;
+    private string? _pendingTitle;      // candidate new title being debounced
+    private int _pendingTitleCount;     // consecutive polls the candidate has held
     private bool _isPaused;
     private bool _isIdle;
     private bool _isScreenLocked;
@@ -94,9 +104,11 @@ public class ActivityTracker : IDisposable
 
             if (nowIdle && !_isIdle)
             {
-                // Transition to idle — close the current event
+                // Transition to idle — close the current event. Backdate its end to
+                // when input actually stopped (~idleMs ago), not now: otherwise the
+                // full idle threshold (up to 2 min) is wrongly credited to this app.
                 _isIdle = true;
-                CloseCurrentEvent();
+                CloseCurrentEvent(idleMs);
                 OnIdleStateChanged?.Invoke(true);
                 return;
             }
@@ -131,11 +143,47 @@ public class ActivityTracker : IDisposable
             }
             else
             {
-                // Same app — update the window title in metadata (e.g. tab changes)
-                _currentWindowTitle = windowTitle;
-                if (_currentEvent?.Metadata != null)
+                // Same process. If the window title changed and this app's title is
+                // meaningful (a browser tab, an editor file, a Slack channel), split
+                // into a new event so per-tab / per-file history is preserved rather
+                // than a single event that only remembers the last title.
+                bool titleChanged =
+                    !string.Equals(windowTitle, _currentWindowTitle, StringComparison.Ordinal);
+
+                if (titleChanged && IsTitleSignificant(processName))
                 {
-                    _currentEvent.Metadata["window_title"] = windowTitle;
+                    // Debounce: require the new title to hold for a few polls first.
+                    if (string.Equals(windowTitle, _pendingTitle, StringComparison.Ordinal))
+                    {
+                        _pendingTitleCount++;
+                    }
+                    else
+                    {
+                        _pendingTitle = windowTitle;
+                        _pendingTitleCount = 1;
+                    }
+
+                    if (_pendingTitleCount >= TitleChangeStabilityPolls)
+                    {
+                        CloseCurrentEvent();
+                        StartNewEvent(processName, windowTitle);
+                    }
+                    // Otherwise leave the current event untouched — the old title
+                    // stays its activity_name, and the brief new title isn't recorded
+                    // unless it persists long enough to matter.
+                }
+                else
+                {
+                    // Title unchanged, or an app whose title isn't meaningful: keep
+                    // the latest title in metadata (original behavior) and drop any
+                    // in-progress split candidate.
+                    _currentWindowTitle = windowTitle;
+                    if (_currentEvent?.Metadata != null)
+                    {
+                        _currentEvent.Metadata["window_title"] = windowTitle;
+                    }
+                    _pendingTitle = null;
+                    _pendingTitleCount = 0;
                 }
             }
         }
@@ -149,6 +197,8 @@ public class ActivityTracker : IDisposable
     {
         _currentProcessName = processName;
         _currentWindowTitle = windowTitle;
+        _pendingTitle = null;
+        _pendingTitleCount = 0;
         _currentEvent = new ActivityEvent
         {
             ActivityName = GetDisplayName(processName, windowTitle),
@@ -162,11 +212,26 @@ public class ActivityTracker : IDisposable
         };
     }
 
-    private void CloseCurrentEvent()
+    /// <param name="idleMsToSubtract">
+    /// When closing because the user went idle, the amount of idle time to trim from
+    /// the end so the idle span isn't credited to this app. 0 for normal closes.
+    /// </param>
+    private void CloseCurrentEvent(long idleMsToSubtract = 0)
     {
         if (_currentEvent == null) return;
 
-        _currentEvent.EndTime = DateTime.UtcNow;
+        var end = DateTime.UtcNow;
+        if (idleMsToSubtract > 0)
+        {
+            end = end.AddMilliseconds(-idleMsToSubtract);
+            // Never let the end precede the start (e.g. an event shorter than the
+            // idle threshold that only just began before input stopped).
+            if (end < _currentEvent.StartTime)
+            {
+                end = _currentEvent.StartTime;
+            }
+        }
+        _currentEvent.EndTime = end;
 
         // Only emit events longer than 2 seconds to filter out transient flickers
         var duration = _currentEvent.EndTime.Value - _currentEvent.StartTime;
@@ -178,6 +243,8 @@ public class ActivityTracker : IDisposable
         _currentEvent = null;
         _currentProcessName = null;
         _currentWindowTitle = null;
+        _pendingTitle = null;
+        _pendingTitleCount = 0;
     }
 
     /// <summary>
@@ -259,6 +326,31 @@ public class ActivityTracker : IDisposable
     private static bool IsBrowser(string processNameLower) =>
         processNameLower is "chrome" or "firefox" or "msedge" or "brave"
         or "opera" or "vivaldi" or "arc" or "iexplore";
+
+    /// <summary>
+    /// Apps whose window title identifies a distinct activity (a browser tab, an
+    /// editor file, a Slack channel, a terminal's cwd, an Explorer folder). For these,
+    /// a title change is treated as a new event. Media players and the like are
+    /// deliberately absent — their titles churn per track and carry little work signal.
+    /// </summary>
+    private static bool IsTitleSignificant(string processName)
+    {
+        var lower = processName.ToLowerInvariant();
+        if (IsBrowser(lower)) return true;
+
+        return lower is
+            // Editors / IDEs — title is the open file
+            "code" or "code - insiders" or "codium" or "cursor" or "windsurf"
+            or "antigravity" or "devenv" or "idea64" or "idea" or "rider64" or "rider"
+            or "webstorm64" or "pycharm64" or "clion64" or "goland64" or "studio64"
+            or "sublime_text" or "nvim" or "vim"
+            // Chat — title is the channel / conversation
+            or "slack"
+            // Terminal — title is the cwd / running command
+            or "windowsterminal" or "wt"
+            // File manager — title is the folder
+            or "explorer";
+    }
 
     /// <summary>
     /// Forces the current event to close (used on app exit or pause).

@@ -43,6 +43,14 @@ jobs:
         distribution: 'temurin'
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
+    - name: Compute version from tag
+      run: |
+        VER="${GITHUB_REF_NAME#v}"
+        echo "VERSION_NAME=$VER" >> "$GITHUB_ENV"
+        # versionCode must be a monotonically increasing int. Encode major.minor.patch
+        # as MA*10000 + MI*100 + PA (valid while minor/patch stay < 100).
+        IFS='.' read -r MA MI PA <<< "$VER"
+        echo "VERSION_CODE=$(( ${MA:-0} * 10000 + ${MI:-0} * 100 + ${PA:-0} ))" >> "$GITHUB_ENV"
     - name: Create local.properties
       run: |
         echo "supabase.url=${{ secrets.SUPABASE_URL }}" > local.properties
@@ -58,6 +66,8 @@ jobs:
         KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        VERSION_NAME: ${{ env.VERSION_NAME }}
+        VERSION_CODE: ${{ env.VERSION_CODE }}
     - name: Upload Android artifact
       uses: actions/upload-artifact@v4
       with:

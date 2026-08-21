@@ -9,7 +9,13 @@ import {
   LineChart, Line
 } from 'recharts';
 import { Clock, Activity, MonitorSmartphone, TrendingUp, GitCompareArrows } from 'lucide-react';
-import { getActivityHex, DEFAULT_ACTIVITY_COLOR, ACTIVITY_TYPES, RADIUS } from '@/lib/design-tokens';
+import {
+  getActivityHex,
+  getActivityToken,
+  isDurationType,
+  DEFAULT_ACTIVITY_COLOR,
+  RADIUS,
+} from '@/lib/design-tokens';
 import { formatTimeFromMinutes, getShiftedDate } from '@/lib/timeline-utils';
 
 interface SummaryViewProps {
@@ -253,6 +259,37 @@ export default function SummaryView({ date }: SummaryViewProps) {
   const cp = data.current_period;
   const cmp = data.comparison_period;
 
+  // Trend-chart series are derived from the activity types actually present in the
+  // response, not from a static list. Iterating a fixed list meant any type missing
+  // from it was silently absent from the chart while still being counted in the pie
+  // chart below — the two disagreed by 66 of 76 hours. Deriving from the data means
+  // a new type from a future client version can never go missing again.
+  type TrendPoint = { date: string; activity_type: string; total_minutes: number };
+  type TrendRow = { date: string } & Record<string, number | string>;
+
+  const trendRows: TrendRow[] = Object.values(
+    (cp.time_series as TrendPoint[]).reduce((acc: Record<string, TrendRow>, curr) => {
+      if (!acc[curr.date]) acc[curr.date] = { date: curr.date };
+      acc[curr.date][curr.activity_type] = curr.total_minutes;
+      return acc;
+    }, {})
+  );
+
+  const trendSeries = Array.from(
+    new Set((cp.time_series as TrendPoint[]).map((t) => t.activity_type))
+  )
+    // Signals (notifications, screen on/off) are instantaneous — plotting them as
+    // "minutes spent" would be meaningless.
+    .filter((type) => isDurationType(type))
+    .map((type) => {
+      const token = getActivityToken(type);
+      return {
+        value: type,
+        hex: token.hex,
+        label: 'label' in token ? token.label : (type as string),
+      };
+    });
+
   // Calculate Deltas
   const totalDelta = cmp ? ((cp.total_active_time_minutes - cmp.total_active_time_minutes) / Math.max(1, cmp.total_active_time_minutes)) * 100 : 0;
   
@@ -413,27 +450,20 @@ export default function SummaryView({ date }: SummaryViewProps) {
           </h3>
           <div className="w-full h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={
-                // Transform data: group by date, make activity_types as keys
-                Object.values(cp.time_series.reduce((acc: any, curr: any) => {
-                  if (!acc[curr.date]) acc[curr.date] = { date: curr.date };
-                  acc[curr.date][curr.activity_type] = curr.total_minutes;
-                  return acc;
-                }, {}))
-              }>
+              <LineChart data={trendRows}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" />
                 <XAxis dataKey="date" tick={{ fill: '#a1a1aa', fontSize: 11 }} tickLine={false} axisLine={false} />
                 <YAxis hide />
                 <RechartsTooltip content={<CustomBarTooltip />} cursor={{ fill: '#27272a', opacity: 0.1 }} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: 12, color: '#a1a1aa' }} />
                 
-                {ACTIVITY_TYPES.map(t => (
-                  <Line 
+                {trendSeries.map(t => (
+                  <Line
                     key={t.value}
-                    type="monotone" 
+                    type="monotone"
                     dataKey={t.value}
                     name={t.label}
-                    stroke={t.hex} 
+                    stroke={t.hex}
                     strokeWidth={2}
                     dot={false}
                   />
